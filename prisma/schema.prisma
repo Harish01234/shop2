@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                        String             @id
+  name                      String
+  email                     String
+  emailVerified             Boolean            @default(false)
+  image                     String?
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+  role                      String?
+  banned                    Boolean?           @default(false)
+  banReason                 String?
+  banExpires                DateTime?
+  sessions                  Session[]
+  accounts                  Account[]
+  jinis                     Jinis[]
+  jinisCharas               JinisChara[]
+  interests                 Interest[]
+  dailyCalculations         DailyCalculation[]
+  dailyCalculationsEditedBy DailyCalculation[] @relation("DailyCalculationLastEditedBy")
+  mainCalculations          MainCalculation[]
+  mainCalculationsEditedBy  MainCalculation[]  @relation("MainCalculationLastEditedBy")
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  issuer                String
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([issuer, accountId], map: "account_issuer_accountId_uidx")
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+enum JinisType {
+  GOLD
+  SILVER
+  BOTH
+  UNKNOWN
+}
+
+enum JinisItemType {
+  GOLD
+  SILVER
+}
+
+model Jinis {
+  id           String      @id @default(cuid())
+  slNo         Int
+  name         String
+  fatherName   String
+  phoneNo      String
+  credit       Int
+  type         JinisType
+  /// Sum of items.wet where type is GOLD
+  goldWeight   Float       @default(0)
+  /// Sum of items.wet where type is SILVER
+  silverWeight Float       @default(0)
+  date         DateTime
+  active       Boolean     @default(true)
+  settledAt    DateTime?
+  createdById  String
+  createdBy    User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  items        JinisItem[]
+  interests    Interest[]
+
+  @@index([slNo])
+  @@index([name])
+  @@index([phoneNo])
+  @@index([date])
+  @@index([active])
+  @@index([active, date])
+  @@index([settledAt])
+}
+
+model JinisItem {
+  id      String        @id @default(cuid())
+  name    String
+  wet     Float
+  type    JinisItemType
+  jinisId String
+  jinis   Jinis         @relation(fields: [jinisId], references: [id], onDelete: Cascade)
+
+  @@index([jinisId])
+  @@index([type])
+}
+
+model JinisChara {
+  id          String     @id @default(cuid())
+  slNo        Int
+  name        String
+  fatherName  String
+  phoneNo     String
+  credit      Int
+  percentage  Float      @default(5)
+  description String?
+  date        DateTime
+  active      Boolean    @default(true)
+  settledAt   DateTime?
+  createdById String
+  createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  interests   Interest[]
+
+  @@index([slNo])
+  @@index([name])
+  @@index([phoneNo])
+  @@index([date])
+  @@index([active])
+  @@index([active, date])
+  @@index([settledAt])
+}
+
+model Interest {
+  id           String      @id @default(cuid())
+  amount       Int
+  date         DateTime
+  remarks      String?
+  jinisId      String?
+  jinis        Jinis?      @relation(fields: [jinisId], references: [id], onDelete: Restrict)
+  jinisCharaId String?
+  jinisChara   JinisChara? @relation(fields: [jinisCharaId], references: [id], onDelete: Restrict)
+  personName   String?
+  createdById  String
+  createdBy    User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([date])
+  @@index([jinisId])
+  @@index([jinisCharaId])
+  @@index([personName])
+}
+
+enum DailyCalculationRecordStatus {
+  OPEN
+  CLOSED
+}
+
+enum DailyCalculationBalanceStatus {
+  CORRECT
+  INCORRECT
+}
+
+/// App-layer validation (not enforceable in schema):
+/// - periodStart <= periodEnd
+/// - no overlapping periods between any two DailyCalculation records
+model DailyCalculation {
+  id String @id @default(cuid())
+
+  periodStart DateTime
+  periodEnd   DateTime
+  tabil       Int
+  cashInHome  Int
+  cashInShop  Int
+
+  // Automatic fields (server-calculated only — never accept from the client)
+  asol             Int
+  sudh             Int
+  deoya            Int
+  personMoneyTotal Int
+  leftTotal        Int
+  rightTotal       Int
+  difference       Int
+  balanceStatus    DailyCalculationBalanceStatus
+
+  recordStatus DailyCalculationRecordStatus @default(OPEN)
+  openedAt     DateTime                     @default(now())
+  closedAt     DateTime?
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // CLOSED records can still be edited; only the most recent editor is stored
+  lastEditedById String?
+  lastEditedBy   User?     @relation("DailyCalculationLastEditedBy", fields: [lastEditedById], references: [id], onDelete: SetNull)
+  lastEditedAt   DateTime?
+
+  personMoneyEntries DailyCalculationPersonMoney[]
+  mainCalculations   MainCalculation[]
+
+  @@index([periodStart])
+  @@index([periodEnd])
+  @@index([recordStatus])
+  @@index([balanceStatus])
+}
+
+model DailyCalculationPersonMoney {
+  id                 String           @id @default(cuid())
+  personName         String
+  amount             Int
+  remarks            String?
+  dailyCalculationId String
+  dailyCalculation   DailyCalculation @relation(fields: [dailyCalculationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([dailyCalculationId])
+}
+
+enum MainCalculationRecordStatus {
+  DRAFT
+  FINALIZED
+}
+
+/// App-layer validation (not enforceable in schema):
+/// - dailyCalculationId must reference a DailyCalculation with recordStatus === OPEN
+/// - bandak uses the same total as Total Active Jinis Credit (SUM credit where active)
+/// - jinisChara must use outstanding credit as of calculationDate (historical state),
+///   not simply today's active field — see the calculation service
+model MainCalculation {
+  id String @id @default(cuid())
+
+  calculationDate DateTime
+  totalTabil      Int
+
+  dailyCalculationId String           @unique
+  dailyCalculation   DailyCalculation @relation(fields: [dailyCalculationId], references: [id], onDelete: Restrict)
+
+  // Automatic fields (server-calculated only — never accept from the client)
+  interest      Int
+  bandak        Int
+  jinisChara    Int
+  cash          Int
+  leftTotal     Int
+  rightTotal    Int
+  difference    Int
+  balanceStatus DailyCalculationBalanceStatus
+
+  recordStatus MainCalculationRecordStatus @default(DRAFT)
+  finalizedAt  DateTime?
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lastEditedById String?
+  lastEditedBy   User?     @relation("MainCalculationLastEditedBy", fields: [lastEditedById], references: [id], onDelete: SetNull)
+  lastEditedAt   DateTime?
+
+  @@index([calculationDate])
+  @@index([recordStatus])
+  @@index([balanceStatus])
+}

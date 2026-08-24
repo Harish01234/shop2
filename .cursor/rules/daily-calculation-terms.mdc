@@ -1,0 +1,34 @@
+---
+description: Business meanings of Daily Calculation terms (Tabil, Asol, Sudh, Deoya) and which dates to use
+alwaysApply: true
+---
+
+# Daily Calculation business terms
+
+Use these names in schema, UI, and code. Do not rename them to generic English labels like openingBalance or principalReturned.
+
+| Term | Meaning | How it is set |
+|---|---|---|
+| **Tabil** | Starting cash / opening balance | Manual. User types it in. Never calculated. |
+| **Asol** | Principal that came back (settled loans) | `SUM(Jinis.credit) + SUM(JinisChara.credit)` where `settledAt` is inside the period |
+| **Sudh** | Interest earned (income) | `SUM(Interest.amount)` where `Interest.date` is inside the period (Jinis, JinisChara, or unlinked person) |
+| **Deoya** | New money given out (new loans) | `SUM(Jinis.credit) + SUM(JinisChara.credit)` where `date` (issue/creation date) is inside the period |
+
+## Critical: Asol vs Deoya
+
+These are different dates on the same Jinis / JinisChara record. Do not mix them.
+
+- **Asol** uses `settledAt` — when the loan was paid off / closed out
+- **Deoya** uses `date` — when the loan was created / money was given
+
+A record issued in one period and settled in another counts as Deoya in the issue period and Asol in the settlement period.
+
+## Derived totals (server only)
+
+- `personMoneyTotal = SUM(person money amounts)`
+- `leftTotal = tabil + asol + sudh - deoya`
+- `rightTotal = cashInHome + cashInShop + personMoneyTotal`
+- `difference = leftTotal - rightTotal`
+- `balanceStatus = CORRECT` iff `difference === 0`
+
+Never use `createdAt` for Asol / Sudh / Deoya. Period queries are inclusive: `periodStart <= date <= periodEnd`. Periods must not overlap.
