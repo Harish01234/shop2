@@ -5,12 +5,37 @@ import { tanstackStartCookies } from 'better-auth/tanstack-start'
 
 import { prisma } from '#/db'
 
+const PRODUCTION_ORIGIN = 'https://shop2-psi-amber.vercel.app'
+
+function resolveAuthBaseURL() {
+  const configured = process.env.BETTER_AUTH_URL
+  const configuredIsLocal =
+    !configured || /localhost|127\.0\.0\.1/i.test(configured)
+
+  if (process.env.VERCEL && configuredIsLocal) {
+    return process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : PRODUCTION_ORIGIN
+  }
+
+  return configured ?? 'http://localhost:3000'
+}
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: 'postgresql',
   }),
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: resolveAuthBaseURL(),
   secret: process.env.BETTER_AUTH_SECRET,
+  trustedOrigins: [
+    'http://localhost:3000',
+    PRODUCTION_ORIGIN,
+    'https://*.vercel.app',
+    ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
+  ],
+  advanced: {
+    trustedProxyHeaders: true,
+  },
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID as string,
