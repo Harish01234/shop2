@@ -1,19 +1,20 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
+import { Controller, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import type { z } from 'zod'
 import { AlertCircleIcon, SearchIcon } from 'lucide-react'
 
 import {
   useCreateInterest,
   useUpdateInterest,
 } from '#/features/interest/interest.hooks'
-import {
-  createInterestSchema,
-  updateInterestSchema,
-} from '#/features/interest/interest.schema'
+import { createInterestSchema } from '#/features/interest/interest.schema'
 import type { InterestRecord } from '#/features/interest/interest.types'
 import { getErrorMessage } from '#/features/interest/interest.utils'
 import { formatMoney } from '#/features/dailycalculation/dailycalculation.utils'
 import { useJinisLinkOptions } from '#/features/jinis/jinis.hooks'
 import { useJinisCharaLinkOptions } from '#/features/jinischara/jinischara.hooks'
+import { toDateInput } from '#/lib/calendar-date'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,7 +33,13 @@ import {
   ComboboxTrigger,
   ComboboxValue,
 } from '@/components/ui/combobox'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  RequiredMark,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { InputGroupAddon } from '@/components/ui/input-group'
 import {
@@ -105,7 +112,6 @@ function InterestLinkCombobox({
   return (
     <Combobox
       name={id}
-      required
       items={options}
       value={selected}
       onValueChange={(item) => onValueChange(item?.id ?? '')}
@@ -155,10 +161,6 @@ function InterestLinkCombobox({
   )
 }
 
-function toDateInput(value: Date | string) {
-  return new Date(value).toISOString().slice(0, 10)
-}
-
 type LinkType = 'jinis' | 'jinischara' | 'person'
 
 function linkTypeFromRecord(interest?: InterestRecord): LinkType {
@@ -191,22 +193,30 @@ export function InterestForm({
   const createMutation = useCreateInterest()
   const updateMutation = useUpdateInterest()
   const saving = createMutation.isPending || updateMutation.isPending
-
-  const [amount, setAmount] = useState(interest ? String(interest.amount) : '')
-  const [date, setDate] = useState(
-    interest
-      ? toDateInput(interest.date)
-      : toDateInput(defaultDate ?? new Date()),
-  )
-  const [remarks, setRemarks] = useState(interest?.remarks ?? '')
+  const [serverError, setServerError] = useState<string | null>(null)
   const [linkType, setLinkType] = useState<LinkType>(linkTypeFromRecord(interest))
-  const [jinisId, setJinisId] = useState(interest?.jinisId ?? '')
-  const [jinisCharaId, setJinisCharaId] = useState(interest?.jinisCharaId ?? '')
-  const [personName, setPersonName] = useState(interest?.personName ?? '')
-  const [settled, setSettled] = useState(linkTypeFromRecord(interest) === 'jinis')
-  const [error, setError] = useState<string | null>(null)
   const [linkQuery, setLinkQuery] = useState('')
   const [debouncedLinkQuery, setDebouncedLinkQuery] = useState('')
+
+  const form = useForm<
+    z.input<typeof createInterestSchema>,
+    unknown,
+    z.output<typeof createInterestSchema>
+  >({
+    resolver: zodResolver(createInterestSchema),
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
+    defaultValues: {
+      amount: interest?.amount,
+      date:
+        toDateInput(interest?.date ?? defaultDate) || toDateInput(new Date()),
+      remarks: interest?.remarks ?? '',
+      jinisId: interest?.jinisId ?? undefined,
+      jinisCharaId: interest?.jinisCharaId ?? undefined,
+      personName: interest?.personName ?? '',
+      settle: linkTypeFromRecord(interest) === 'jinis',
+    },
+  })
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -224,10 +234,7 @@ export function InterestForm({
     !asolContext && linkType === 'jinischara',
     debouncedLinkQuery,
   )
-  const jinisOptions = mergeLinkOption(
-    jinisQuery.data ?? [],
-    interest?.jinis,
-  )
+  const jinisOptions = mergeLinkOption(jinisQuery.data ?? [], interest?.jinis)
   const jinisCharaOptions = mergeLinkOption(
     jinisCharaQuery.data ?? [],
     interest?.jinisChara,
@@ -235,52 +242,55 @@ export function InterestForm({
 
   function handleLinkTypeChange(next: LinkType) {
     setLinkType(next)
-    setSettled(next === 'jinis')
     setLinkQuery('')
     setDebouncedLinkQuery('')
+    form.setValue('jinisId', undefined)
+    form.setValue('jinisCharaId', undefined)
+    form.setValue('personName', '')
+    form.setValue('settle', next === 'jinis')
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    setError(null)
-
-    const payload = {
-      amount: Number(amount),
-      date: new Date(date),
-      remarks: remarks.trim() || undefined,
-      jinisId: linkType === 'jinis' ? jinisId || undefined : undefined,
-      jinisCharaId:
-        linkType === 'jinischara' ? jinisCharaId || undefined : undefined,
-      personName: linkType === 'person' ? personName.trim() || undefined : undefined,
-      settle:
-        !isEdit && (linkType === 'jinis' || linkType === 'jinischara')
-          ? settled
-          : false,
-    }
-
+  async function onSubmit(values: z.output<typeof createInterestSchema>) {
+    setServerError(null)
     try {
       if (isEdit && interest) {
-        const parsed = updateInterestSchema.parse({
+        await updateMutation.mutateAsync({
           id: interest.id,
-          ...payload,
-          jinisId: linkType === 'jinis' ? jinisId : null,
-          jinisCharaId: linkType === 'jinischara' ? jinisCharaId : null,
-          personName: linkType === 'person' ? personName.trim() || null : null,
+          amount: values.amount,
+          date: values.date,
+          remarks: values.remarks ?? null,
+          jinisId: linkType === 'jinis' ? values.jinisId ?? null : null,
+          jinisCharaId:
+            linkType === 'jinischara' ? values.jinisCharaId ?? null : null,
+          personName:
+            linkType === 'person' ? values.personName?.trim() || null : null,
         })
-        await updateMutation.mutateAsync(parsed)
       } else {
-        const parsed = createInterestSchema.parse(payload)
-        await createMutation.mutateAsync(parsed)
+        await createMutation.mutateAsync({
+          ...values,
+          jinisId: linkType === 'jinis' ? values.jinisId : undefined,
+          jinisCharaId:
+            linkType === 'jinischara' ? values.jinisCharaId : undefined,
+          personName:
+            linkType === 'person' ? values.personName : undefined,
+          settle:
+            linkType === 'jinis' || linkType === 'jinischara'
+              ? values.settle
+              : false,
+        })
       }
       onSuccess()
     } catch (caught) {
-      setError(getErrorMessage(caught, 'Could not save this Interest.'))
+      setServerError(getErrorMessage(caught, 'Could not save this Interest.'))
     }
   }
 
+  const errors = form.formState.errors
+  const rootError = errors.root ?? (errors as { ['']?: { message?: string } })['']
+
   return (
     <form
-      onSubmit={(event) => void handleSubmit(event)}
+      onSubmit={form.handleSubmit((values) => void onSubmit(values))}
       className="flex flex-col gap-4"
     >
       <Card className="shadow-none ring-foreground/10">
@@ -289,28 +299,31 @@ export function InterestForm({
         </CardHeader>
         <CardContent>
           <FieldGroup className="grid gap-4 sm:grid-cols-2">
-            <Field>
+            <Field data-invalid={Boolean(errors.amount) || undefined}>
               <FieldLabel htmlFor="amount">
-                {asolContext ? 'Sudh (interest amount)' : 'Amount'}
+                {asolContext ? 'Sudh (interest amount)' : 'Amount'}{' '}
+                <RequiredMark />
               </FieldLabel>
               <Input
                 id="amount"
                 type="number"
                 min="1"
-                required
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
+                aria-invalid={Boolean(errors.amount)}
+                {...form.register('amount')}
               />
+              <FieldError errors={[errors.amount]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="date">Date</FieldLabel>
+            <Field data-invalid={Boolean(errors.date) || undefined}>
+              <FieldLabel htmlFor="date">
+                Date <RequiredMark />
+              </FieldLabel>
               <Input
                 id="date"
                 type="date"
-                required
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
+                aria-invalid={Boolean(errors.date)}
+                {...form.register('date')}
               />
+              <FieldError errors={[errors.date]} />
             </Field>
             {asolContext ? (
               <Field className="sm:col-span-2">
@@ -337,7 +350,9 @@ export function InterestForm({
             ) : null}
             {!asolContext ? (
               <Field>
-                <FieldLabel htmlFor="linkType">Linked to</FieldLabel>
+                <FieldLabel htmlFor="linkType">
+                  Linked to <RequiredMark />
+                </FieldLabel>
                 <NativeSelect
                   id="linkType"
                   className="w-full"
@@ -355,52 +370,72 @@ export function InterestForm({
               </Field>
             ) : null}
             {!asolContext && linkType === 'jinis' ? (
-              <Field>
-                <FieldLabel htmlFor="jinisId">Jinis</FieldLabel>
-                <InterestLinkCombobox
-                  id="jinisId"
-                  value={jinisId}
-                  onValueChange={setJinisId}
-                  options={jinisOptions}
-                  placeholder={
-                    jinisQuery.isLoading ? 'Loading…' : 'Select Jinis'
-                  }
-                  searchPlaceholder="Search sl no or name"
-                  emptyText="No Jinis found."
-                  disabled={jinisQuery.isLoading}
-                  onQueryChange={setLinkQuery}
+              <Field data-invalid={Boolean(errors.jinisId) || undefined}>
+                <FieldLabel htmlFor="jinisId">
+                  Jinis <RequiredMark />
+                </FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="jinisId"
+                  render={({ field }) => (
+                    <InterestLinkCombobox
+                      id="jinisId"
+                      value={typeof field.value === 'string' ? field.value : ''}
+                      onValueChange={field.onChange}
+                      options={jinisOptions}
+                      placeholder={
+                        jinisQuery.isLoading ? 'Loading…' : 'Select Jinis'
+                      }
+                      searchPlaceholder="Search sl no or name"
+                      emptyText="No Jinis found."
+                      disabled={jinisQuery.isLoading}
+                      onQueryChange={setLinkQuery}
+                    />
+                  )}
                 />
+                <FieldError errors={[errors.jinisId]} />
               </Field>
             ) : null}
             {!asolContext && linkType === 'jinischara' ? (
-              <Field>
-                <FieldLabel htmlFor="jinisCharaId">JinisChara</FieldLabel>
-                <InterestLinkCombobox
-                  id="jinisCharaId"
-                  value={jinisCharaId}
-                  onValueChange={setJinisCharaId}
-                  options={jinisCharaOptions}
-                  placeholder={
-                    jinisCharaQuery.isLoading
-                      ? 'Loading…'
-                      : 'Select JinisChara'
-                  }
-                  searchPlaceholder="Search sl no or name"
-                  emptyText="No JinisChara found."
-                  disabled={jinisCharaQuery.isLoading}
-                  onQueryChange={setLinkQuery}
+              <Field data-invalid={Boolean(errors.jinisCharaId) || undefined}>
+                <FieldLabel htmlFor="jinisCharaId">
+                  JinisChara <RequiredMark />
+                </FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="jinisCharaId"
+                  render={({ field }) => (
+                    <InterestLinkCombobox
+                      id="jinisCharaId"
+                      value={typeof field.value === 'string' ? field.value : ''}
+                      onValueChange={field.onChange}
+                      options={jinisCharaOptions}
+                      placeholder={
+                        jinisCharaQuery.isLoading
+                          ? 'Loading…'
+                          : 'Select JinisChara'
+                      }
+                      searchPlaceholder="Search sl no or name"
+                      emptyText="No JinisChara found."
+                      disabled={jinisCharaQuery.isLoading}
+                      onQueryChange={setLinkQuery}
+                    />
+                  )}
                 />
+                <FieldError errors={[errors.jinisCharaId]} />
               </Field>
             ) : null}
             {!asolContext && linkType === 'person' ? (
-              <Field>
-                <FieldLabel htmlFor="personName">Person name</FieldLabel>
+              <Field data-invalid={Boolean(errors.personName) || undefined}>
+                <FieldLabel htmlFor="personName">
+                  Person name <RequiredMark />
+                </FieldLabel>
                 <Input
                   id="personName"
-                  required
-                  value={personName}
-                  onChange={(event) => setPersonName(event.target.value)}
+                  aria-invalid={Boolean(errors.personName)}
+                  {...form.register('personName')}
                 />
+                <FieldError errors={[errors.personName]} />
               </Field>
             ) : null}
             {!isEdit && (linkType === 'jinis' || linkType === 'jinischara') ? (
@@ -408,11 +443,17 @@ export function InterestForm({
                 <FieldLabel htmlFor="settled" className="flex-1">
                   Settled
                 </FieldLabel>
-                <Switch
-                  id="settled"
-                  checked={settled}
-                  onCheckedChange={setSettled}
-                  aria-label="Settled"
+                <Controller
+                  control={form.control}
+                  name="settle"
+                  render={({ field }) => (
+                    <Switch
+                      id="settled"
+                      checked={Boolean(field.value)}
+                      onCheckedChange={field.onChange}
+                      aria-label="Settled"
+                    />
+                  )}
                 />
               </Field>
             ) : null}
@@ -420,20 +461,23 @@ export function InterestForm({
               <FieldLabel htmlFor="remarks">Remarks</FieldLabel>
               <Textarea
                 id="remarks"
-                value={remarks}
-                onChange={(event) => setRemarks(event.target.value)}
                 placeholder="Optional notes"
+                {...form.register('remarks')}
               />
             </Field>
+            <FieldError
+              className="sm:col-span-2"
+              errors={[rootError]}
+            />
           </FieldGroup>
         </CardContent>
       </Card>
 
-      {error ? (
+      {serverError ? (
         <Alert variant="destructive">
           <AlertCircleIcon />
           <AlertTitle>Could not save</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{serverError}</AlertDescription>
         </Alert>
       ) : null}
 

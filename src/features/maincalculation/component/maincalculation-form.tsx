@@ -1,4 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import type { z } from 'zod'
 import { Link } from '@tanstack/react-router'
 import { AlertCircleIcon } from 'lucide-react'
 
@@ -9,10 +12,7 @@ import {
   usePreviewMainCalculation,
   useUpdateMainCalculation,
 } from '#/features/maincalculation/maincalculation.hooks'
-import {
-  createMainCalculationSchema,
-  updateMainCalculationSchema,
-} from '#/features/maincalculation/maincalculation.schema'
+import { createMainCalculationSchema } from '#/features/maincalculation/maincalculation.schema'
 import type { MainCalculationRecord } from '#/features/maincalculation/maincalculation.types'
 import {
   balanceStatusBadgeClass,
@@ -40,7 +40,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  RequiredMark,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   NativeSelect,
@@ -68,31 +74,42 @@ export function MainCalculationForm({
     createMutation.isPending ||
     updateMutation.isPending ||
     finalizeMutation.isPending
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [finalizeOpen, setFinalizeOpen] = useState(false)
 
-  const [calculationDate, setCalculationDate] = useState(
-    record ? toDateInput(record.calculationDate) : toDateInput(new Date()),
-  )
-  const [totalTabil, setTotalTabil] = useState(
-    record ? String(record.totalTabil) : '0',
-  )
-  const [dailyCalculationId, setDailyCalculationId] = useState(
-    record?.dailyCalculationId ?? '',
-  )
+  const form = useForm<
+    z.input<typeof createMainCalculationSchema>,
+    unknown,
+    z.output<typeof createMainCalculationSchema>
+  >({
+    resolver: zodResolver(createMainCalculationSchema),
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
+    defaultValues: {
+      calculationDate:
+        toDateInput(record?.calculationDate) || toDateInput(new Date()),
+      totalTabil: record?.totalTabil ?? 0,
+      dailyCalculationId: record?.dailyCalculationId ?? '',
+    },
+  })
+
+  const calculationDate = form.watch('calculationDate')
+  const totalTabil = form.watch('totalTabil')
+  const dailyCalculationId = form.watch('dailyCalculationId')
+
   const [previewInput, setPreviewInput] = useState({
-    calculationDate,
+    calculationDate: toDateInput(calculationDate),
     totalTabil: Number(totalTabil) || 0,
     dailyCalculationId,
     excludeMainCalculationId: record?.id,
   })
-  const [error, setError] = useState<string | null>(null)
-  const [finalizeOpen, setFinalizeOpen] = useState(false)
 
   const availableQuery = useAvailableDailyCalculations(record?.id)
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setPreviewInput({
-        calculationDate,
+        calculationDate: toDateInput(calculationDate),
         totalTabil: Number(totalTabil) || 0,
         dailyCalculationId,
         excludeMainCalculationId: record?.id,
@@ -109,9 +126,9 @@ export function MainCalculationForm({
 
     const firstAvailable = options.find((option) => option.isAvailable)
     if (firstAvailable) {
-      setDailyCalculationId(firstAvailable.id)
+      form.setValue('dailyCalculationId', firstAvailable.id)
     }
-  }, [availableQuery.data, dailyCalculationId])
+  }, [availableQuery.data, dailyCalculationId, form])
 
   const previewQuery = usePreviewMainCalculation(
     previewInput.calculationDate,
@@ -124,53 +141,39 @@ export function MainCalculationForm({
   const balanceStatus =
     totals?.balanceStatus ?? record?.balanceStatus ?? 'INCORRECT'
 
-  function buildPayload() {
-    return {
-      calculationDate: new Date(`${calculationDate}T00:00:00`),
-      totalTabil: Number(totalTabil),
-      dailyCalculationId,
+  async function saveValues(values: z.output<typeof createMainCalculationSchema>) {
+    if (isEdit && record) {
+      await updateMutation.mutateAsync({ id: record.id, ...values })
+    } else {
+      await createMutation.mutateAsync(values)
     }
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    setError(null)
-
-    const payload = buildPayload()
-
+  async function onSubmit(values: z.output<typeof createMainCalculationSchema>) {
+    setServerError(null)
     try {
-      if (isEdit && record) {
-        const parsed = updateMainCalculationSchema.parse({
-          id: record.id,
-          ...payload,
-        })
-        await updateMutation.mutateAsync(parsed)
-      } else {
-        const parsed = createMainCalculationSchema.parse(payload)
-        await createMutation.mutateAsync(parsed)
-      }
+      await saveValues(values)
       onSuccess()
     } catch (caught) {
-      setError(getErrorMessage(caught, 'Could not save this Main Calculation.'))
+      setServerError(
+        getErrorMessage(caught, 'Could not save this Main Calculation.'),
+      )
     }
   }
 
   async function confirmFinalize() {
     if (!record) return
     setFinalizeOpen(false)
-    setError(null)
+    setServerError(null)
+    const valid = await form.trigger()
+    if (!valid) return
 
     try {
-      const payload = buildPayload()
-      const parsed = updateMainCalculationSchema.parse({
-        id: record.id,
-        ...payload,
-      })
-      await updateMutation.mutateAsync(parsed)
+      await saveValues(createMainCalculationSchema.parse(form.getValues()))
       await finalizeMutation.mutateAsync({ id: record.id })
       onSuccess()
     } catch (caught) {
-      setError(
+      setServerError(
         getErrorMessage(caught, 'Could not finalize this Main Calculation.'),
       )
     }
@@ -182,11 +185,12 @@ export function MainCalculationForm({
     dailyCalculationId &&
       selectableOptions.some((option) => option.id === dailyCalculationId),
   )
+  const errors = form.formState.errors
 
   return (
     <>
       <form
-        onSubmit={(event) => void handleSubmit(event)}
+        onSubmit={form.handleSubmit((values) => void onSubmit(values))}
         className="grid gap-4 lg:grid-cols-2"
       >
         <Card className="shadow-none ring-foreground/10">
@@ -198,27 +202,30 @@ export function MainCalculationForm({
           </CardHeader>
           <CardContent>
             <FieldGroup className="grid gap-4">
-              <Field>
-                <FieldLabel htmlFor="calculationDate">Calculation date</FieldLabel>
+              <Field data-invalid={Boolean(errors.calculationDate) || undefined}>
+                <FieldLabel htmlFor="calculationDate">
+                  Calculation date <RequiredMark />
+                </FieldLabel>
                 <Input
                   id="calculationDate"
                   type="date"
-                  required
-                  value={calculationDate}
-                  onChange={(event) => setCalculationDate(event.target.value)}
+                  aria-invalid={Boolean(errors.calculationDate)}
+                  {...form.register('calculationDate')}
                 />
+                <FieldError errors={[errors.calculationDate]} />
               </Field>
-              <Field>
+              <Field
+                data-invalid={Boolean(errors.dailyCalculationId) || undefined}
+              >
                 <FieldLabel htmlFor="dailyCalculationId">
-                  Daily Calculation
+                  Daily Calculation <RequiredMark />
                 </FieldLabel>
                 <NativeSelect
                   id="dailyCalculationId"
                   className="w-full"
-                  required
-                  value={dailyCalculationId}
                   disabled={availableQuery.isPending}
-                  onChange={(event) => setDailyCalculationId(event.target.value)}
+                  aria-invalid={Boolean(errors.dailyCalculationId)}
+                  {...form.register('dailyCalculationId')}
                 >
                   <NativeSelectOption value="" disabled>
                     {availableQuery.isPending
@@ -238,6 +245,7 @@ export function MainCalculationForm({
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>
+                <FieldError errors={[errors.dailyCalculationId]} />
                 {availableQuery.isError ? (
                   <p className="text-sm text-destructive">
                     {getErrorMessage(
@@ -267,16 +275,18 @@ export function MainCalculationForm({
                   </p>
                 ) : null}
               </Field>
-              <Field>
-                <FieldLabel htmlFor="totalTabil">Total Tabil</FieldLabel>
+              <Field data-invalid={Boolean(errors.totalTabil) || undefined}>
+                <FieldLabel htmlFor="totalTabil">
+                  Total Tabil <RequiredMark />
+                </FieldLabel>
                 <Input
                   id="totalTabil"
                   type="number"
                   min="0"
-                  required
-                  value={totalTabil}
-                  onChange={(event) => setTotalTabil(event.target.value)}
+                  aria-invalid={Boolean(errors.totalTabil)}
+                  {...form.register('totalTabil')}
                 />
+                <FieldError errors={[errors.totalTabil]} />
               </Field>
             </FieldGroup>
           </CardContent>
@@ -366,11 +376,11 @@ export function MainCalculationForm({
           </CardContent>
         </Card>
 
-        {error ? (
+        {serverError ? (
           <Alert variant="destructive" className="lg:col-span-2">
             <AlertCircleIcon />
             <AlertTitle>Could not save</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{serverError}</AlertDescription>
           </Alert>
         ) : null}
 

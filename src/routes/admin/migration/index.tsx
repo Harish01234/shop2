@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { AlertCircleIcon } from 'lucide-react'
 
+import { parseDateInput } from '#/lib/calendar-date'
 import { AdminJinisPreviewTable } from '#/features/admin/admin-jinis-preview-table'
 import { parseJinisCsv, type CsvJinisPreviewRow } from '#/features/admin/admin.csv'
 import {
@@ -78,7 +79,7 @@ function AdminJinisMigrationPage() {
           slNo: row.slNo as number,
           name: row.name,
           fatherName: row.fatherName,
-          date: new Date(row.date),
+          date: parseDateInput(row.date),
           credit: row.credit as number,
           phoneNo: row.phoneNo,
         })),

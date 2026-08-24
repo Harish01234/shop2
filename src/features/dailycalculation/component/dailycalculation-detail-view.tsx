@@ -1,4 +1,6 @@
-import { format } from 'date-fns'
+import { useState } from 'react'
+import { Link, getRouteApi } from '@tanstack/react-router'
+import { useServerFn } from '@tanstack/react-start'
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -6,9 +8,6 @@ import {
   PlusIcon,
   Trash2Icon,
 } from 'lucide-react'
-import { useState } from 'react'
-import { Link, getRouteApi } from '@tanstack/react-router'
-import { useServerFn } from '@tanstack/react-start'
 
 import { DailyCalculationModal } from '#/features/dailycalculation/component/dailycalculation-modal'
 import {
@@ -26,6 +25,7 @@ import {
   formatMoney,
   formatPeriodLabel,
 } from '#/features/dailycalculation/dailycalculation.utils'
+import { formatCalendarDate, parseDateInput, toDateInput } from '#/lib/calendar-date'
 import { InterestModal } from '#/features/interest/component/interest-modal'
 import { getInterest } from '#/features/interest/interest.functions'
 import { useDeleteInterest } from '#/features/interest/interest.hooks'
@@ -75,37 +75,22 @@ type DailyCalculationDetailViewProps = {
 }
 
 function formatDetailDate(value: Date | string) {
-  return format(new Date(value), 'dd MMM yyyy')
+  return formatCalendarDate(value)
 }
 
 function defaultInterestDateInPeriod(
   periodStart: Date | string,
   periodEnd: Date | string,
 ) {
-  const start = new Date(periodStart)
-  const end = new Date(periodEnd)
-  const today = new Date()
-  const todayTime = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  ).getTime()
-  const startTime = new Date(
-    start.getFullYear(),
-    start.getMonth(),
-    start.getDate(),
-  ).getTime()
-  const endTime = new Date(
-    end.getFullYear(),
-    end.getMonth(),
-    end.getDate(),
-  ).getTime()
+  const start = toDateInput(periodStart)
+  const end = toDateInput(periodEnd)
+  const today = toDateInput(new Date())
 
-  if (todayTime >= startTime && todayTime <= endTime) {
-    return today
+  if (today && start && end && today >= start && today <= end) {
+    return parseDateInput(today)
   }
 
-  return end
+  return parseDateInput(end || start || toDateInput(new Date()))
 }
 
 function DetailColumnEmpty({ message }: { message: string }) {

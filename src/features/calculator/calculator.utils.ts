@@ -1,29 +1,27 @@
 import { addMonths, differenceInCalendarDays, differenceInMonths } from 'date-fns'
 
+import { parseDateInput, toDateInput } from '#/lib/calendar-date'
+
 export const INTEREST_RATE_OPTIONS = [2, 2.5, 3] as const
 export const COMPOUNDING_MONTH_OPTIONS = [12, 6] as const
 
 export type InterestRateOption = (typeof INTEREST_RATE_OPTIONS)[number]
 export type CompoundingMonths = (typeof COMPOUNDING_MONTH_OPTIONS)[number]
 
-const DAY_VALUE = /^\d{4}-\d{2}-\d{2}$/
-
 export function toDayValue(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return toDateInput(value)
 }
 
 export function parseDayValue(value: string) {
-  if (!DAY_VALUE.test(value)) return null
-  const date = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return null
-  return date
+  try {
+    return parseDateInput(value)
+  } catch {
+    return null
+  }
 }
 
 export function todayDayValue() {
-  return toDayValue(new Date())
+  return toDateInput(new Date())
 }
 
 /** Full months between the dates; any leftover day rounds up to the next month. */

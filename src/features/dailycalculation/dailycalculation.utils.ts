@@ -1,12 +1,15 @@
-import { format } from 'date-fns'
+import { formatCalendarDate } from '#/lib/calendar-date'
 
 import type {
   DailyCalculationBalanceStatus,
   DailyCalculationRecordStatus,
 } from './dailycalculation.types'
 
-export function sumPersonMoneyTotal(entries: { amount: number }[]) {
-  return entries.reduce((total, entry) => total + entry.amount, 0)
+export { toDateInput } from '#/lib/calendar-date'
+export { getErrorMessage } from '#/lib/form-error'
+
+export function sumPersonMoneyTotal(entries: { amount?: unknown }[]) {
+  return entries.reduce((total, entry) => total + (Number(entry.amount) || 0), 0)
 }
 
 export function deriveDailyCalculationTotals(input: {
@@ -33,27 +36,12 @@ export function deriveDailyCalculationTotals(input: {
   }
 }
 
-export function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
-
-export function toDateInput(value: Date | string) {
-  const date = new Date(value)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 export function formatMoney(value: number) {
   return value.toLocaleString('en-IN')
 }
 
 export function formatPeriod(start: Date | string, end: Date | string) {
-  return `${format(new Date(start), 'dd MMM yyyy')} – ${format(new Date(end), 'dd MMM yyyy')}`
+  return `${formatCalendarDate(start)} – ${formatCalendarDate(end)}`
 }
 
 export function formatPeriodLabel(
@@ -61,7 +49,7 @@ export function formatPeriodLabel(
   end: Date | string,
   recordStatus: DailyCalculationRecordStatus,
 ) {
-  const startLabel = format(new Date(start), 'dd MMM yyyy')
+  const startLabel = formatCalendarDate(start)
   if (recordStatus === 'OPEN') {
     return `${startLabel} – Ongoing`
   }

@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { formatCalendarDate } from '#/lib/calendar-date'
 import { PencilIcon, Trash2Icon } from 'lucide-react'
 
 import type { JinisCharaRecord } from '#/features/jinischara/jinischara.types'
@@ -87,7 +87,7 @@ export function JinisCharaTable({
               <TableCell>{record.percentage.toFixed(2)}%</TableCell>
               <TableCell>{record.credit.toLocaleString('en-IN')}</TableCell>
               <TableCell>
-                {format(new Date(record.date), 'dd MMM yyyy')}
+                {formatCalendarDate(record.date)}
               </TableCell>
               <TableCell>
                 <Badge variant={record.active ? 'default' : 'secondary'}>

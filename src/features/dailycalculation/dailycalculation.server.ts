@@ -1,5 +1,13 @@
 import { prisma } from '#/db'
 import type { DailyCalculationWhereInput } from '#/generated/prisma/models/DailyCalculation'
+import {
+  canonicalizeCalendarDate,
+  dayEnd,
+  dayStart,
+  inclusivePeriod,
+  toCalendarDay,
+  uniqueCalendarDays,
+} from '#/lib/calendar-date'
 import { paginationArgs } from '#/lib/pagination'
 
 import type {
@@ -8,7 +16,6 @@ import type {
   DailyCalculationAsolSudhRow,
   DailyCalculationDeoyaRow,
   DailyCalculationIdInput,
-  DailyCalculationPersonMoneyInput,
   DailyCalculationTotals,
   ListDailyCalculationInput,
   UpdateDailyCalculationInput,
@@ -40,30 +47,12 @@ const relatedInclude = {
   ...relatedUserSelect,
 }
 
-function toDayString(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function dayStart(value: string) {
-  return new Date(`${value}T00:00:00`)
-}
-
-function dayEnd(value: string) {
-  return new Date(`${value}T23:59:59.999`)
-}
-
-function inclusivePeriod(periodStart: Date, periodEnd: Date) {
-  return {
-    periodStart: dayStart(toDayString(periodStart)),
-    periodEnd: dayEnd(toDayString(periodEnd)),
-  }
-}
-
 function personMoneyCreateData(
-  entries: DailyCalculationPersonMoneyInput[],
+  entries: Array<{
+    personName: string
+    amount: number
+    remarks?: string | null
+  }>,
 ) {
   return entries.map((entry) => ({
     personName: entry.personName,
@@ -77,22 +66,60 @@ async function assertNoOverlappingPeriod(
   periodEnd: Date,
   excludeId?: string,
 ) {
-  if (periodStart.getTime() > periodEnd.getTime()) {
+  const incoming = inclusivePeriod(periodStart, periodEnd)
+  if (incoming.periodStart.getTime() > incoming.periodEnd.getTime()) {
     throw new Error('Period start must be on or before period end.')
   }
 
-  const overlapping = await prisma.dailyCalculation.findFirst({
-    where: {
-      ...(excludeId ? { id: { not: excludeId } } : {}),
-      periodStart: { lte: periodEnd },
-      periodEnd: { gte: periodStart },
-    },
-    select: { id: true },
+  const records = await prisma.dailyCalculation.findMany({
+    where: excludeId ? { id: { not: excludeId } } : undefined,
+    select: { id: true, periodStart: true, periodEnd: true },
+  })
+
+  const overlapping = records.some((row) => {
+    const other = inclusivePeriod(row.periodStart, row.periodEnd)
+    return (
+      incoming.periodStart.getTime() <= other.periodEnd.getTime() &&
+      incoming.periodEnd.getTime() >= other.periodStart.getTime()
+    )
   })
 
   if (overlapping) {
     throw new Error('This period overlaps an existing Daily Calculation.')
   }
+}
+
+export async function refreshDailyCalculationsForDates(
+  dates: Array<Date | string | null | undefined>,
+) {
+  const days = uniqueCalendarDays(dates)
+  if (days.length === 0) return
+
+  const records = await prisma.dailyCalculation.findMany({
+    select: { id: true, periodStart: true, periodEnd: true },
+  })
+
+  const ids = records
+    .filter((row) => {
+      const start = toCalendarDay(row.periodStart)
+      const end = toCalendarDay(row.periodEnd)
+      return days.some((day) => start <= day && day <= end)
+    })
+    .map((row) => row.id)
+
+  await Promise.all(
+    ids.map((id) => refreshDailyCalculationTotalsRecord({ id })),
+  )
+}
+
+export async function refreshAllDailyCalculationTotals() {
+  const records = await prisma.dailyCalculation.findMany({
+    select: { id: true },
+  })
+
+  await Promise.all(
+    records.map((row) => refreshDailyCalculationTotalsRecord({ id: row.id })),
+  )
 }
 
 async function computeAsolForPeriod(periodStart: Date, periodEnd: Date) {
@@ -176,7 +203,10 @@ async function computePeriodTotals(input: {
 export async function previewDailyCalculationTotals(
   data: CreateDailyCalculationInput,
 ) {
-  const period = inclusivePeriod(data.periodStart, data.periodEnd)
+  const period = inclusivePeriod(
+    canonicalizeCalendarDate(data.periodStart),
+    canonicalizeCalendarDate(data.periodEnd),
+  )
   return computePeriodTotals({
     ...period,
     tabil: data.tabil,
@@ -605,11 +635,13 @@ export async function createDailyCalculationRecord(
   data: CreateDailyCalculationInput,
   createdById: string,
 ) {
-  const period = inclusivePeriod(data.periodStart, data.periodEnd)
-  await assertNoOverlappingPeriod(period.periodStart, period.periodEnd)
+  const periodStart = canonicalizeCalendarDate(data.periodStart)
+  const periodEnd = canonicalizeCalendarDate(data.periodEnd)
+  await assertNoOverlappingPeriod(periodStart, periodEnd)
+  const queryPeriod = inclusivePeriod(periodStart, periodEnd)
 
   const totals = await computePeriodTotals({
-    ...period,
+    ...queryPeriod,
     tabil: data.tabil,
     cashInHome: data.cashInHome,
     cashInShop: data.cashInShop,
@@ -618,7 +650,8 @@ export async function createDailyCalculationRecord(
 
   return prisma.dailyCalculation.create({
     data: {
-      ...period,
+      periodStart,
+      periodEnd,
       tabil: data.tabil,
       cashInHome: data.cashInHome,
       cashInShop: data.cashInShop,
@@ -645,15 +678,14 @@ export async function updateDailyCalculationRecord(
     return null
   }
 
-  const period = inclusivePeriod(
+  const periodStart = canonicalizeCalendarDate(
     data.periodStart ?? existing.periodStart,
+  )
+  const periodEnd = canonicalizeCalendarDate(
     data.periodEnd ?? existing.periodEnd,
   )
-  await assertNoOverlappingPeriod(
-    period.periodStart,
-    period.periodEnd,
-    existing.id,
-  )
+  await assertNoOverlappingPeriod(periodStart, periodEnd, existing.id)
+  const queryPeriod = inclusivePeriod(periodStart, periodEnd)
 
   const personMoneyEntries =
     data.personMoneyEntries ?? existing.personMoneyEntries
@@ -661,7 +693,7 @@ export async function updateDailyCalculationRecord(
   const cashInHome = data.cashInHome ?? existing.cashInHome
   const cashInShop = data.cashInShop ?? existing.cashInShop
   const totals = await computePeriodTotals({
-    ...period,
+    ...queryPeriod,
     tabil,
     cashInHome,
     cashInShop,
@@ -671,7 +703,8 @@ export async function updateDailyCalculationRecord(
   return prisma.dailyCalculation.update({
     where: { id: data.id },
     data: {
-      ...period,
+      periodStart,
+      periodEnd,
       tabil,
       cashInHome,
       cashInShop,

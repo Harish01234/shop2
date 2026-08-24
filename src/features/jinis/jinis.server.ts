@@ -1,5 +1,12 @@
 import { prisma } from '#/db'
 import type { JinisWhereInput } from '#/generated/prisma/models/Jinis'
+import { refreshDailyCalculationsForDates } from '#/features/dailycalculation/dailycalculation.server'
+import {
+  canonicalizeCalendarDate,
+  canonicalizeOptionalCalendarDate,
+  dayEnd,
+  dayStart,
+} from '#/lib/calendar-date'
 import {
   LINK_OPTIONS_LIMIT,
   paginationArgs,
@@ -13,14 +20,6 @@ import type {
   SettleJinisInput,
   UpdateJinisInput,
 } from './jinis.types'
-
-function dayStart(value: string) {
-  return new Date(`${value}T00:00:00`)
-}
-
-function dayEnd(value: string) {
-  return new Date(`${value}T23:59:59.999`)
-}
 
 const jinisListSelect = {
   id: true,
@@ -181,8 +180,9 @@ export async function createJinisRecord(
   createdById: string,
 ) {
   const weights = sumJinisWeights(data.items)
+  const date = canonicalizeCalendarDate(data.date)
 
-  return prisma.jinis.create({
+  const record = await prisma.jinis.create({
     data: {
       slNo: data.slNo,
       name: data.name,
@@ -190,7 +190,7 @@ export async function createJinisRecord(
       phoneNo: data.phoneNo,
       credit: data.credit,
       type: data.type,
-      date: data.date,
+      date,
       active: data.active,
       goldWeight: weights.goldWeight,
       silverWeight: weights.silverWeight,
@@ -201,6 +201,9 @@ export async function createJinisRecord(
     },
     include: { items: true },
   })
+
+  await refreshDailyCalculationsForDates([record.date])
+  return record
 }
 
 export async function updateJinisRecord(data: UpdateJinisInput) {
@@ -212,13 +215,20 @@ export async function updateJinisRecord(data: UpdateJinisInput) {
     return null
   }
 
-  const { id, items, ...fields } = data
+  const { id, items, date: dateInput, settledAt: settledAtInput, ...fields } =
+    data
   const weights = items ? sumJinisWeights(items) : null
+  const date = dateInput === undefined
+    ? undefined
+    : canonicalizeCalendarDate(dateInput)
+  const settledAt = canonicalizeOptionalCalendarDate(settledAtInput)
 
-  return prisma.jinis.update({
+  const record = await prisma.jinis.update({
     where: { id },
     data: {
       ...fields,
+      ...(date ? { date } : {}),
+      ...(settledAt !== undefined ? { settledAt } : {}),
       ...(weights && items
         ? {
             goldWeight: weights.goldWeight,
@@ -232,6 +242,14 @@ export async function updateJinisRecord(data: UpdateJinisInput) {
     },
     include: { items: true },
   })
+
+  await refreshDailyCalculationsForDates([
+    existing.date,
+    existing.settledAt,
+    record.date,
+    record.settledAt,
+  ])
+  return record
 }
 
 export async function deleteJinisRecord(data: JinisIdInput) {
@@ -247,6 +265,7 @@ export async function deleteJinisRecord(data: JinisIdInput) {
     where: { id: data.id },
   })
 
+  await refreshDailyCalculationsForDates([existing.date, existing.settledAt])
   return { id: data.id }
 }
 
@@ -259,14 +278,22 @@ export async function settleJinisRecord(data: SettleJinisInput) {
     return null
   }
 
-  return prisma.jinis.update({
+  const record = await prisma.jinis.update({
     where: { id: data.id },
     data: {
       active: false,
-      settledAt: data.settledAt ?? new Date(),
+      settledAt: canonicalizeCalendarDate(data.settledAt ?? new Date()),
     },
     include: { items: true },
   })
+
+  await refreshDailyCalculationsForDates([
+    existing.date,
+    existing.settledAt,
+    record.date,
+    record.settledAt,
+  ])
+  return record
 }
 
 export async function sumActiveJinisCredit() {

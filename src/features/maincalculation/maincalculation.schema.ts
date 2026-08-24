@@ -1,6 +1,12 @@
 import { z } from 'zod'
 
 import { listPaginationSchema } from '#/lib/pagination'
+import {
+  calendarDateField,
+  optionalCalendarDateField,
+  requiredNonNegativeInt,
+  requiredText,
+} from '#/lib/form-schema'
 
 export const mainCalculationRecordStatusSchema = z.enum(['DRAFT', 'FINALIZED'])
 
@@ -10,18 +16,24 @@ export const mainCalculationViewSchema = z.enum(['draft', 'finalized', 'all'])
 
 // Client-entered fields only. Automatic totals are server-calculated.
 export const mainCalculationInputSchema = z.object({
-  calculationDate: z.coerce.date(),
-  totalTabil: z.number().int().nonnegative(),
-  dailyCalculationId: z.string().min(1),
+  calculationDate: calendarDateField,
+  totalTabil: requiredNonNegativeInt(
+    'Enter Total Tabil',
+    'Total Tabil must be a whole number 0 or greater',
+  ),
+  dailyCalculationId: requiredText('Choose a Daily Calculation'),
 })
 
 export const createMainCalculationSchema = mainCalculationInputSchema
 
 export const updateMainCalculationSchema = z.object({
   id: z.string().min(1),
-  calculationDate: z.coerce.date().optional(),
-  totalTabil: z.number().int().nonnegative().optional(),
-  dailyCalculationId: z.string().min(1).optional(),
+  calculationDate: optionalCalendarDateField,
+  totalTabil: requiredNonNegativeInt(
+    'Enter Total Tabil',
+    'Total Tabil must be a whole number 0 or greater',
+  ).optional(),
+  dailyCalculationId: requiredText('Choose a Daily Calculation').optional(),
 })
 
 export const previewMainCalculationSchema = mainCalculationInputSchema.extend({

@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useFieldArray, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import type { z } from 'zod'
 import { AlertCircleIcon } from 'lucide-react'
 
 import {
@@ -11,14 +14,8 @@ import {
   usePreviewDailyCalculation,
   useUpdateDailyCalculation,
 } from '#/features/dailycalculation/dailycalculation.hooks'
-import {
-  createDailyCalculationSchema,
-  updateDailyCalculationSchema,
-} from '#/features/dailycalculation/dailycalculation.schema'
-import type {
-  DailyCalculationPersonMoneyInput,
-  DailyCalculationRecord,
-} from '#/features/dailycalculation/dailycalculation.types'
+import { createDailyCalculationSchema } from '#/features/dailycalculation/dailycalculation.schema'
+import type { DailyCalculationRecord } from '#/features/dailycalculation/dailycalculation.types'
 import {
   deriveDailyCalculationTotals,
   formatMoney,
@@ -36,7 +33,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  RequiredMark,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 
@@ -44,18 +47,6 @@ type DailyCalculationFormProps = {
   record?: DailyCalculationRecord
   onSuccess: () => void
   onCancel: () => void
-}
-
-function filledPersonMoneyEntries(
-  entries: DailyCalculationPersonMoneyInput[],
-) {
-  return entries
-    .map((entry) => ({
-      personName: entry.personName.trim(),
-      amount: Number(entry.amount),
-      remarks: entry.remarks?.trim() || undefined,
-    }))
-    .filter((entry) => entry.personName && entry.amount > 0)
 }
 
 export function DailyCalculationForm({
@@ -71,40 +62,55 @@ export function DailyCalculationForm({
     createMutation.isPending ||
     updateMutation.isPending ||
     closeMutation.isPending
+  const [serverError, setServerError] = useState<string | null>(null)
 
-  const [periodStart, setPeriodStart] = useState(
-    record ? toDateInput(record.periodStart) : toDateInput(new Date()),
-  )
-  const [periodEnd, setPeriodEnd] = useState(
-    record ? toDateInput(record.periodEnd) : toDateInput(new Date()),
-  )
-  const [previewPeriod, setPreviewPeriod] = useState({
-    periodStart,
-    periodEnd,
+  const form = useForm<
+    z.input<typeof createDailyCalculationSchema>,
+    unknown,
+    z.output<typeof createDailyCalculationSchema>
+  >({
+    resolver: zodResolver(createDailyCalculationSchema),
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
+    defaultValues: {
+      periodStart: toDateInput(record?.periodStart) || toDateInput(new Date()),
+      periodEnd: toDateInput(record?.periodEnd) || toDateInput(new Date()),
+      tabil: record?.tabil ?? 0,
+      cashInHome: record?.cashInHome ?? 0,
+      cashInShop: record?.cashInShop ?? 0,
+      personMoneyEntries: record?.personMoneyEntries?.length
+        ? record.personMoneyEntries.map((entry) => ({
+            personName: entry.personName,
+            amount: entry.amount,
+            remarks: entry.remarks ?? '',
+          }))
+        : [emptyPersonMoney()],
+    },
   })
-  const [tabil, setTabil] = useState(record ? String(record.tabil) : '0')
-  const [cashInHome, setCashInHome] = useState(
-    record ? String(record.cashInHome) : '0',
-  )
-  const [cashInShop, setCashInShop] = useState(
-    record ? String(record.cashInShop) : '0',
-  )
-  const [personMoneyEntries, setPersonMoneyEntries] = useState<
-    DailyCalculationPersonMoneyInput[]
-  >(
-    record?.personMoneyEntries?.length
-      ? record.personMoneyEntries.map((entry) => ({
-          personName: entry.personName,
-          amount: entry.amount,
-          remarks: entry.remarks ?? '',
-        }))
-      : [emptyPersonMoney()],
-  )
-  const [error, setError] = useState<string | null>(null)
+
+  const personMoneyArray = useFieldArray({
+    control: form.control,
+    name: 'personMoneyEntries',
+  })
+
+  const periodStart = form.watch('periodStart')
+  const periodEnd = form.watch('periodEnd')
+  const tabil = form.watch('tabil')
+  const cashInHome = form.watch('cashInHome')
+  const cashInShop = form.watch('cashInShop')
+  const personMoneyEntries = form.watch('personMoneyEntries')
+
+  const [previewPeriod, setPreviewPeriod] = useState({
+    periodStart: toDateInput(periodStart),
+    periodEnd: toDateInput(periodEnd),
+  })
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setPreviewPeriod({ periodStart, periodEnd })
+      setPreviewPeriod({
+        periodStart: toDateInput(periodStart),
+        periodEnd: toDateInput(periodEnd),
+      })
     }, 400)
 
     return () => window.clearTimeout(timer)
@@ -119,7 +125,9 @@ export function DailyCalculationForm({
   const sudh = previewQuery.data?.sudh ?? record?.sudh ?? 0
   const deoya = previewQuery.data?.deoya ?? record?.deoya ?? 0
   const personMoneyTotal = sumPersonMoneyTotal(
-    filledPersonMoneyEntries(personMoneyEntries),
+    (personMoneyEntries ?? []).filter(
+      (entry) => entry.personName?.trim() && Number(entry.amount) > 0,
+    ),
   )
   const derived = useMemo(
     () =>
@@ -135,61 +143,48 @@ export function DailyCalculationForm({
     [tabil, asol, sudh, deoya, cashInHome, cashInShop, personMoneyTotal],
   )
 
-  function buildPayload() {
-    return {
-      periodStart: new Date(`${periodStart}T00:00:00`),
-      periodEnd: new Date(`${periodEnd}T00:00:00`),
-      tabil: Number(tabil),
-      cashInHome: Number(cashInHome),
-      cashInShop: Number(cashInShop),
-      personMoneyEntries: filledPersonMoneyEntries(personMoneyEntries),
+  async function saveValues(values: z.output<typeof createDailyCalculationSchema>) {
+    if (isEdit && record) {
+      await updateMutation.mutateAsync({ id: record.id, ...values })
+    } else {
+      await createMutation.mutateAsync(values)
     }
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    setError(null)
-
-    const payload = buildPayload()
-
+  async function onSubmit(values: z.output<typeof createDailyCalculationSchema>) {
+    setServerError(null)
     try {
-      if (isEdit && record) {
-        const parsed = updateDailyCalculationSchema.parse({
-          id: record.id,
-          ...payload,
-        })
-        await updateMutation.mutateAsync(parsed)
-      } else {
-        const parsed = createDailyCalculationSchema.parse(payload)
-        await createMutation.mutateAsync(parsed)
-      }
+      await saveValues(values)
       onSuccess()
     } catch (caught) {
-      setError(getErrorMessage(caught, 'Could not save this Daily Calculation.'))
+      setServerError(
+        getErrorMessage(caught, 'Could not save this Daily Calculation.'),
+      )
     }
   }
 
   async function handleClose() {
     if (!record) return
-    setError(null)
+    setServerError(null)
+    const valid = await form.trigger()
+    if (!valid) return
 
     try {
-      const payload = buildPayload()
-      const parsed = updateDailyCalculationSchema.parse({
-        id: record.id,
-        ...payload,
-      })
-      await updateMutation.mutateAsync(parsed)
+      await saveValues(createDailyCalculationSchema.parse(form.getValues()))
       await closeMutation.mutateAsync({ id: record.id })
       onSuccess()
     } catch (caught) {
-      setError(getErrorMessage(caught, 'Could not close this Daily Calculation.'))
+      setServerError(
+        getErrorMessage(caught, 'Could not close this Daily Calculation.'),
+      )
     }
   }
 
+  const errors = form.formState.errors
+
   return (
     <form
-      onSubmit={(event) => void handleSubmit(event)}
+      onSubmit={form.handleSubmit((values) => void onSubmit(values))}
       className="flex flex-col gap-4"
     >
       <Card className="shadow-none ring-foreground/10">
@@ -201,38 +196,44 @@ export function DailyCalculationForm({
         </CardHeader>
         <CardContent>
           <FieldGroup className="grid gap-4 sm:grid-cols-3">
-            <Field>
-              <FieldLabel htmlFor="periodStart">Period start</FieldLabel>
+            <Field data-invalid={Boolean(errors.periodStart) || undefined}>
+              <FieldLabel htmlFor="periodStart">
+                Period start <RequiredMark />
+              </FieldLabel>
               <Input
                 id="periodStart"
                 type="date"
-                required
                 disabled={isEdit}
-                value={periodStart}
-                onChange={(event) => setPeriodStart(event.target.value)}
+                aria-invalid={Boolean(errors.periodStart)}
+                {...form.register('periodStart')}
               />
+              <FieldError errors={[errors.periodStart]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="periodEnd">Period end</FieldLabel>
+            <Field data-invalid={Boolean(errors.periodEnd) || undefined}>
+              <FieldLabel htmlFor="periodEnd">
+                Period end <RequiredMark />
+              </FieldLabel>
               <Input
                 id="periodEnd"
                 type="date"
-                required
                 disabled={isEdit && record?.recordStatus === 'OPEN'}
-                value={periodEnd}
-                onChange={(event) => setPeriodEnd(event.target.value)}
+                aria-invalid={Boolean(errors.periodEnd)}
+                {...form.register('periodEnd')}
               />
+              <FieldError errors={[errors.periodEnd]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="tabil">Tabil</FieldLabel>
+            <Field data-invalid={Boolean(errors.tabil) || undefined}>
+              <FieldLabel htmlFor="tabil">
+                Tabil <RequiredMark />
+              </FieldLabel>
               <Input
                 id="tabil"
                 type="number"
                 min="0"
-                required
-                value={tabil}
-                onChange={(event) => setTabil(event.target.value)}
+                aria-invalid={Boolean(errors.tabil)}
+                {...form.register('tabil')}
               />
+              <FieldError errors={[errors.tabil]} />
             </Field>
           </FieldGroup>
         </CardContent>
@@ -282,32 +283,39 @@ export function DailyCalculationForm({
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <FieldGroup className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="cashInHome">Cash in home</FieldLabel>
+            <Field data-invalid={Boolean(errors.cashInHome) || undefined}>
+              <FieldLabel htmlFor="cashInHome">
+                Cash in home <RequiredMark />
+              </FieldLabel>
               <Input
                 id="cashInHome"
                 type="number"
                 min="0"
-                required
-                value={cashInHome}
-                onChange={(event) => setCashInHome(event.target.value)}
+                aria-invalid={Boolean(errors.cashInHome)}
+                {...form.register('cashInHome')}
               />
+              <FieldError errors={[errors.cashInHome]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="cashInShop">Cash in shop</FieldLabel>
+            <Field data-invalid={Boolean(errors.cashInShop) || undefined}>
+              <FieldLabel htmlFor="cashInShop">
+                Cash in shop <RequiredMark />
+              </FieldLabel>
               <Input
                 id="cashInShop"
                 type="number"
                 min="0"
-                required
-                value={cashInShop}
-                onChange={(event) => setCashInShop(event.target.value)}
+                aria-invalid={Boolean(errors.cashInShop)}
+                {...form.register('cashInShop')}
               />
+              <FieldError errors={[errors.cashInShop]} />
             </Field>
           </FieldGroup>
           <DailyCalculationPersonMoneyFields
-            entries={personMoneyEntries}
-            onChange={setPersonMoneyEntries}
+            fields={personMoneyArray.fields}
+            register={form.register}
+            errors={errors}
+            onAdd={() => personMoneyArray.append(emptyPersonMoney())}
+            onRemove={(index) => personMoneyArray.remove(index)}
           />
         </CardContent>
       </Card>
@@ -350,11 +358,11 @@ export function DailyCalculationForm({
         </CardContent>
       </Card>
 
-      {error ? (
+      {serverError ? (
         <Alert variant="destructive">
           <AlertCircleIcon />
           <AlertTitle>Could not save</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{serverError}</AlertDescription>
         </Alert>
       ) : null}
 

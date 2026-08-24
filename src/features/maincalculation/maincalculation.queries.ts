@@ -5,6 +5,7 @@ import {
   listQueryDefaults,
   previewQueryDefaults,
 } from '#/lib/query-options'
+import { parseDateInput } from '#/lib/calendar-date'
 
 import {
   getMainCalculation,
@@ -81,7 +82,7 @@ export function previewMainCalculationQueryOptions(input: {
     queryFn: () =>
       previewMainCalculation({
         data: {
-          calculationDate: new Date(`${input.calculationDate}T00:00:00`),
+          calculationDate: parseDateInput(input.calculationDate),
           totalTabil: input.totalTabil,
           dailyCalculationId: input.dailyCalculationId,
           excludeMainCalculationId: input.excludeMainCalculationId,

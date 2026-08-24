@@ -1,5 +1,12 @@
 import { prisma } from '#/db'
 import type { JinisCharaWhereInput } from '#/generated/prisma/models/JinisChara'
+import { refreshDailyCalculationsForDates } from '#/features/dailycalculation/dailycalculation.server'
+import {
+  canonicalizeCalendarDate,
+  canonicalizeOptionalCalendarDate,
+  dayEnd,
+  dayStart,
+} from '#/lib/calendar-date'
 import {
   LINK_OPTIONS_LIMIT,
   paginationArgs,
@@ -13,14 +20,6 @@ import type {
   UpdateJinisCharaInput,
 } from './jinischara.types'
 import { DEFAULT_JINISCHARA_PERCENTAGE } from './jinischara.utils'
-
-function dayStart(value: string) {
-  return new Date(`${value}T00:00:00`)
-}
-
-function dayEnd(value: string) {
-  return new Date(`${value}T23:59:59.999`)
-}
 
 const jinisCharaListSelect = {
   id: true,
@@ -183,7 +182,8 @@ export async function createJinisCharaRecord(
   data: CreateJinisCharaInput,
   createdById: string,
 ) {
-  return prisma.jinisChara.create({
+  const date = canonicalizeCalendarDate(data.date)
+  const record = await prisma.jinisChara.create({
     data: {
       slNo: data.slNo,
       name: data.name,
@@ -192,11 +192,14 @@ export async function createJinisCharaRecord(
       credit: data.credit,
       percentage: data.percentage ?? DEFAULT_JINISCHARA_PERCENTAGE,
       description: data.description || null,
-      date: data.date,
+      date,
       active: data.active,
       createdById,
     },
   })
+
+  await refreshDailyCalculationsForDates([record.date])
+  return record
 }
 
 export async function updateJinisCharaRecord(data: UpdateJinisCharaInput) {
@@ -208,17 +211,31 @@ export async function updateJinisCharaRecord(data: UpdateJinisCharaInput) {
     return null
   }
 
-  const { id, ...fields } = data
+  const { id, date: dateInput, settledAt: settledAtInput, ...fields } = data
+  const date = dateInput === undefined
+    ? undefined
+    : canonicalizeCalendarDate(dateInput)
+  const settledAt = canonicalizeOptionalCalendarDate(settledAtInput)
 
-  return prisma.jinisChara.update({
+  const record = await prisma.jinisChara.update({
     where: { id },
     data: {
       ...fields,
+      ...(date ? { date } : {}),
+      ...(settledAt !== undefined ? { settledAt } : {}),
       ...(fields.description !== undefined
         ? { description: fields.description || null }
         : {}),
     },
   })
+
+  await refreshDailyCalculationsForDates([
+    existing.date,
+    existing.settledAt,
+    record.date,
+    record.settledAt,
+  ])
+  return record
 }
 
 export async function deleteJinisCharaRecord(data: JinisCharaIdInput) {
@@ -234,6 +251,7 @@ export async function deleteJinisCharaRecord(data: JinisCharaIdInput) {
     where: { id: data.id },
   })
 
+  await refreshDailyCalculationsForDates([existing.date, existing.settledAt])
   return { id: data.id }
 }
 
@@ -246,13 +264,21 @@ export async function settleJinisCharaRecord(data: SettleJinisCharaInput) {
     return null
   }
 
-  return prisma.jinisChara.update({
+  const record = await prisma.jinisChara.update({
     where: { id: data.id },
     data: {
       active: false,
-      settledAt: data.settledAt ?? new Date(),
+      settledAt: canonicalizeCalendarDate(data.settledAt ?? new Date()),
     },
   })
+
+  await refreshDailyCalculationsForDates([
+    existing.date,
+    existing.settledAt,
+    record.date,
+    record.settledAt,
+  ])
+  return record
 }
 
 export async function sumActiveJinisCharaCredit() {

@@ -1,3 +1,5 @@
+import { parseDateInput } from '#/lib/calendar-date'
+
 export function normalizeHeader(value: string) {
   return value
     .replace(/^\uFEFF/, '')
@@ -112,8 +114,11 @@ export function parseDate(value: string) {
   if (!trimmed) return null
 
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
-    const date = new Date(`${trimmed.slice(0, 10)}T00:00:00`)
-    return Number.isNaN(date.getTime()) ? null : date
+    try {
+      return parseDateInput(trimmed.slice(0, 10))
+    } catch {
+      return null
+    }
   }
 
   const slash = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/)
@@ -124,16 +129,12 @@ export function parseDate(value: string) {
     const dayFirst = first > 12 || second <= 12
     const day = dayFirst ? first : second
     const month = dayFirst ? second : first
-    const date = new Date(year, month - 1, day)
-    if (
-      Number.isNaN(date.getTime()) ||
-      date.getFullYear() !== year ||
-      date.getMonth() !== month - 1 ||
-      date.getDate() !== day
-    ) {
+    const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    try {
+      return parseDateInput(ymd)
+    } catch {
       return null
     }
-    return date
   }
 
   const serial = Number(trimmed)
@@ -145,9 +146,4 @@ export function parseDate(value: string) {
   return null
 }
 
-export function toDateInput(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+export { toDateInput } from '#/lib/calendar-date'

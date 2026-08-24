@@ -1,5 +1,6 @@
-import { format } from 'date-fns'
 import { CheckIcon, EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react'
+
+import { formatCalendarDate } from '#/lib/calendar-date'
 
 import type { MainCalculationRecord } from '#/features/maincalculation/maincalculation.types'
 import {
@@ -94,7 +95,7 @@ export function MainCalculationTable({
           {records.map((record) => (
             <TableRow key={record.id}>
               <TableCell>
-                {format(new Date(record.calculationDate), 'dd MMM yyyy')}
+                {formatCalendarDate(record.calculationDate)}
               </TableCell>
               <TableCell>
                 {formatPeriod(

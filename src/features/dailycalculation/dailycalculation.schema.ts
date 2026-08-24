@@ -1,6 +1,12 @@
 import { z } from 'zod'
 
 import { listPaginationSchema } from '#/lib/pagination'
+import {
+  calendarDateField,
+  optionalCalendarDateField,
+  optionalText,
+  requiredNonNegativeInt,
+} from '#/lib/form-schema'
 
 export const dailyCalculationRecordStatusSchema = z.enum(['OPEN', 'CLOSED'])
 
@@ -11,11 +17,44 @@ export const dailyCalculationBalanceStatusSchema = z.enum([
 
 export const dailyCalculationViewSchema = z.enum(['open', 'closed', 'all'])
 
-export const dailyCalculationPersonMoneySchema = z.object({
-  personName: z.string().trim().min(1),
-  amount: z.number().int().positive(),
-  remarks: z.string().trim().optional(),
-})
+export const dailyCalculationPersonMoneySchema = z
+  .object({
+    personName: z.string().trim(),
+    amount: z.preprocess((value) => {
+      if (value === '' || value === null || value === undefined) return 0
+      if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+      if (typeof value === 'string') {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : 0
+      }
+      return 0
+    }, z
+      .number({ error: 'Enter amount' })
+      .int('Amount must be a whole number 0 or greater')
+      .nonnegative('Amount must be a whole number 0 or greater')),
+    remarks: optionalText,
+  })
+  .superRefine((entry, ctx) => {
+    const hasName = Boolean(entry.personName)
+    const hasAmount = entry.amount > 0
+    if (!hasName && !hasAmount) return
+
+    if (!hasName) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Enter a name',
+        path: ['personName'],
+      })
+    }
+
+    if (!hasAmount) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Enter amount',
+        path: ['amount'],
+      })
+    }
+  })
 
 function hasValidPeriod(data: {
   periodStart?: Date
@@ -30,32 +69,64 @@ const periodOrderIssue = {
   path: ['periodEnd'],
 }
 
+function filledPersonMoneyEntries(
+  entries: Array<{
+    personName: string
+    amount: number
+    remarks?: string
+  }>,
+) {
+  return entries.filter((entry) => entry.personName && entry.amount > 0)
+}
+
 // Client-entered fields only. Automatic totals (asol, sudh, deoya,
 // personMoneyTotal, leftTotal, rightTotal, difference, balanceStatus) are
 // server-calculated and must not be accepted from the client.
 // Overlapping periods are validated in the service layer, not here.
 export const createDailyCalculationSchema = z
   .object({
-    periodStart: z.coerce.date(),
-    periodEnd: z.coerce.date(),
-    tabil: z.number().int().nonnegative(),
-    cashInHome: z.number().int().nonnegative(),
-    cashInShop: z.number().int().nonnegative(),
+    periodStart: calendarDateField,
+    periodEnd: calendarDateField,
+    tabil: requiredNonNegativeInt(
+      'Enter Tabil',
+      'Tabil must be a whole number 0 or greater',
+    ),
+    cashInHome: requiredNonNegativeInt(
+      'Enter cash in home',
+      'Cash in home must be a whole number 0 or greater',
+    ),
+    cashInShop: requiredNonNegativeInt(
+      'Enter cash in shop',
+      'Cash in shop must be a whole number 0 or greater',
+    ),
     personMoneyEntries: z
       .array(dailyCalculationPersonMoneySchema)
-      .default([]),
+      .default([])
+      .transform(filledPersonMoneyEntries),
   })
   .refine(hasValidPeriod, periodOrderIssue)
 
 export const updateDailyCalculationSchema = z
   .object({
     id: z.string().min(1),
-    periodStart: z.coerce.date().optional(),
-    periodEnd: z.coerce.date().optional(),
-    tabil: z.number().int().nonnegative().optional(),
-    cashInHome: z.number().int().nonnegative().optional(),
-    cashInShop: z.number().int().nonnegative().optional(),
-    personMoneyEntries: z.array(dailyCalculationPersonMoneySchema).optional(),
+    periodStart: optionalCalendarDateField,
+    periodEnd: optionalCalendarDateField,
+    tabil: requiredNonNegativeInt(
+      'Enter Tabil',
+      'Tabil must be a whole number 0 or greater',
+    ).optional(),
+    cashInHome: requiredNonNegativeInt(
+      'Enter cash in home',
+      'Cash in home must be a whole number 0 or greater',
+    ).optional(),
+    cashInShop: requiredNonNegativeInt(
+      'Enter cash in shop',
+      'Cash in shop must be a whole number 0 or greater',
+    ).optional(),
+    personMoneyEntries: z
+      .array(dailyCalculationPersonMoneySchema)
+      .transform(filledPersonMoneyEntries)
+      .optional(),
   })
   .refine(hasValidPeriod, periodOrderIssue)
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useServerFn } from '@tanstack/react-start'
 
+import { refetchDailyCalculations } from '#/features/dailycalculation/dailycalculation.queries'
 import {
   createJinis,
   deleteJinis,
@@ -56,7 +57,10 @@ export function useCreateJinis() {
   return useMutation({
     mutationFn: (data: CreateJinisInput) => createJinisFn({ data }),
     onSuccess: async () => {
-      await refetchJinisLists(queryClient)
+      await Promise.all([
+        refetchJinisLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
       toast.add({
         title: 'Jinis created successfully',
         type: 'success',
@@ -79,7 +83,10 @@ export function useUpdateJinis() {
   return useMutation({
     mutationFn: (data: UpdateJinisInput) => updateJinisFn({ data }),
     onSuccess: async () => {
-      await refetchJinisLists(queryClient)
+      await Promise.all([
+        refetchJinisLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
       toast.add({
         title: 'Jinis updated successfully',
         type: 'success',
@@ -103,7 +110,10 @@ export function useDeleteJinis() {
     mutationFn: (record: JinisRecord) =>
       deleteJinisFn({ data: { id: record.id } }),
     onSuccess: async () => {
-      await refetchJinisLists(queryClient)
+      await Promise.all([
+        refetchJinisLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
       toast.add({
         title: 'Jinis deleted successfully',
         type: 'success',
@@ -139,7 +149,10 @@ export function useToggleJinis() {
         },
       }),
     onSuccess: async () => {
-      await refetchJinisLists(queryClient)
+      await Promise.all([
+        refetchJinisLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
     },
     onError: () => {
       toast.add({

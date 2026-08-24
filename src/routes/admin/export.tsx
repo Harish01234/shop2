@@ -20,11 +20,8 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from '@/components/ui/native-select'
+import { parseDateInput, toDateInput } from '#/lib/calendar-date'
 import { Spinner } from '@/components/ui/spinner'
-
-function toDateInput(value: Date) {
-  return value.toISOString().slice(0, 10)
-}
 
 function defaultFrom() {
   const date = new Date()
@@ -48,8 +45,8 @@ function AdminExportPage() {
     await exportDataMutation.mutateAsync({
       type,
       format,
-      from: new Date(from),
-      to: new Date(to),
+      from: parseDateInput(from),
+      to: parseDateInput(to),
     }).catch(() => {})
   }
 

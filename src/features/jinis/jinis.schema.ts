@@ -1,6 +1,13 @@
 import { z } from 'zod'
 
 import { listPaginationSchema } from '#/lib/pagination'
+import {
+  calendarDateField,
+  optionalCalendarDateField,
+  requiredPositiveInt,
+  requiredPositiveNumber,
+  requiredText,
+} from '#/lib/form-schema'
 
 export const jinisTypeSchema = z.enum([
   'GOLD',
@@ -15,36 +22,49 @@ export const jinisItemTypeSchema = z.enum([
 ])
 
 export const jinisItemSchema = z.object({
-  name: z.string().trim().min(1),
-  wet: z.number().positive(),
+  name: requiredText('Enter an item name'),
+  wet: requiredPositiveNumber('Enter weight', 'Weight must be greater than 0'),
   type: jinisItemTypeSchema,
 })
 
 export const createJinisSchema = z.object({
-  slNo: z.number().int().positive(),
-  name: z.string().trim().min(1),
-  fatherName: z.string().trim().min(1),
-  phoneNo: z.string().trim().min(1),
-  credit: z.number().int().positive(),
+  slNo: requiredPositiveInt(
+    'Enter serial no',
+    'Serial no must be a whole number greater than 0',
+  ),
+  name: requiredText('Enter a name'),
+  fatherName: requiredText('Enter father name'),
+  phoneNo: requiredText('Enter phone number'),
+  credit: requiredPositiveInt(
+    'Enter credit',
+    'Credit must be a whole number greater than 0',
+  ),
   type: jinisTypeSchema,
-  date: z.coerce.date(),
+  date: calendarDateField,
   active: z.boolean().default(true),
-  items: z.array(jinisItemSchema).min(1),
+  items: z
+    .array(jinisItemSchema)
+    .min(1, 'Add at least one item'),
 })
 
 export const updateJinisSchema = z.object({
   id: z.string().min(1),
-
-  slNo: z.number().int().positive().optional(),
-  name: z.string().trim().min(1).optional(),
-  fatherName: z.string().trim().min(1).optional(),
-  phoneNo: z.string().trim().min(1).optional(),
-  credit: z.number().int().positive().optional(),
+  slNo: requiredPositiveInt(
+    'Enter serial no',
+    'Serial no must be a whole number greater than 0',
+  ).optional(),
+  name: requiredText('Enter a name').optional(),
+  fatherName: requiredText('Enter father name').optional(),
+  phoneNo: requiredText('Enter phone number').optional(),
+  credit: requiredPositiveInt(
+    'Enter credit',
+    'Credit must be a whole number greater than 0',
+  ).optional(),
   type: jinisTypeSchema.optional(),
-  date: z.coerce.date().optional(),
+  date: optionalCalendarDateField,
   active: z.boolean().optional(),
   settledAt: z.coerce.date().nullable().optional(),
-  items: z.array(jinisItemSchema).min(1).optional(),
+  items: z.array(jinisItemSchema).min(1, 'Add at least one item').optional(),
 })
 
 export const jinisIdSchema = z.object({
@@ -87,4 +107,3 @@ export const settleJinisSchema = z.object({
   id: z.string().min(1),
   settledAt: z.coerce.date().optional(),
 })
-

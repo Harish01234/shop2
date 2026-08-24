@@ -1,6 +1,14 @@
 import { z } from 'zod'
 
 import { listPaginationSchema } from '#/lib/pagination'
+import {
+  calendarDateField,
+  optionalCalendarDateField,
+  optionalNullableText,
+  optionalText,
+  requiredPositiveInt,
+  requiredText,
+} from '#/lib/form-schema'
 
 export const interestSourceSchema = z.enum([
   'jinis',
@@ -8,6 +16,16 @@ export const interestSourceSchema = z.enum([
   'person',
   'all',
 ])
+
+function emptyToUndefined(value: unknown) {
+  if (value === '' || value === null || value === undefined) return undefined
+  return value
+}
+
+function emptyToNull(value: unknown) {
+  if (value === '' || value === undefined) return null
+  return value
+}
 
 function hasInterestTarget(data: {
   jinisId?: string | null
@@ -19,12 +37,21 @@ function hasInterestTarget(data: {
 
 export const createInterestSchema = z
   .object({
-    amount: z.number().int().positive(),
-    date: z.coerce.date(),
-    remarks: z.string().trim().optional(),
-    jinisId: z.string().trim().min(1).optional(),
-    jinisCharaId: z.string().trim().min(1).optional(),
-    personName: z.string().trim().optional(),
+    amount: requiredPositiveInt(
+      'Enter amount',
+      'Amount must be a whole number greater than 0',
+    ),
+    date: calendarDateField,
+    remarks: optionalText,
+    jinisId: z.preprocess(
+      emptyToUndefined,
+      z.string().trim().min(1, 'Choose a Jinis').optional(),
+    ),
+    jinisCharaId: z.preprocess(
+      emptyToUndefined,
+      z.string().trim().min(1, 'Choose a JinisChara').optional(),
+    ),
+    personName: z.preprocess(emptyToUndefined, requiredText('Enter a name').optional()),
     settle: z.boolean().optional().default(false),
   })
   .refine(hasInterestTarget, {
@@ -37,12 +64,21 @@ export const createInterestSchema = z
 
 export const updateInterestSchema = z.object({
   id: z.string().min(1),
-  amount: z.number().int().positive().optional(),
-  date: z.coerce.date().optional(),
-  remarks: z.string().trim().nullable().optional(),
-  jinisId: z.string().trim().min(1).nullable().optional(),
-  jinisCharaId: z.string().trim().min(1).nullable().optional(),
-  personName: z.string().trim().nullable().optional(),
+  amount: requiredPositiveInt(
+    'Enter amount',
+    'Amount must be a whole number greater than 0',
+  ).optional(),
+  date: optionalCalendarDateField,
+  remarks: optionalNullableText,
+  jinisId: z.preprocess(
+    emptyToNull,
+    z.string().trim().min(1).nullable().optional(),
+  ),
+  jinisCharaId: z.preprocess(
+    emptyToNull,
+    z.string().trim().min(1).nullable().optional(),
+  ),
+  personName: z.preprocess(emptyToNull, z.string().trim().nullable().optional()),
 })
 
 export const interestIdSchema = z.object({

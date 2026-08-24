@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { formatCalendarDate } from '#/lib/calendar-date'
 
 import type { CsvJinisPreviewRow } from './admin.csv'
 import { Badge } from '@/components/ui/badge'
@@ -58,7 +58,7 @@ export function AdminJinisPreviewTable({
               <TableCell>{record.fatherName || '—'}</TableCell>
               <TableCell>
                 {record.date && record.date !== '1970-01-01'
-                  ? format(new Date(`${record.date}T00:00:00`), 'dd MMM yyyy')
+                  ? formatCalendarDate(record.date)
                   : '—'}
               </TableCell>
               <TableCell>

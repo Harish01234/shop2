@@ -1,6 +1,13 @@
 import { prisma } from '#/db'
 import type { MainCalculationWhereInput } from '#/generated/prisma/models/MainCalculation'
 import { paginationArgs } from '#/lib/pagination'
+import {
+  canonicalizeCalendarDate,
+  dayEnd,
+  dayStart,
+  inclusivePeriod,
+  toCalendarDay,
+} from '#/lib/calendar-date'
 import { sumPersonMoneyTotal } from '#/features/dailycalculation/dailycalculation.utils'
 import { sumActiveJinisCredit } from '#/features/jinis/jinis.server'
 
@@ -39,33 +46,11 @@ const relatedInclude = {
   },
 } as const
 
-function toDayString(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function dayStart(value: string) {
-  return new Date(`${value}T00:00:00`)
-}
-
-function dayEnd(value: string) {
-  return new Date(`${value}T23:59:59.999`)
-}
-
 function jinisCharaOutstandingAsOf(calculationDate: Date) {
-  const asOfEnd = dayEnd(toDayString(calculationDate))
+  const asOfEnd = dayEnd(toCalendarDay(calculationDate))
   return {
     date: { lte: asOfEnd },
     OR: [{ settledAt: null }, { settledAt: { gt: asOfEnd } }],
-  }
-}
-
-function inclusivePeriod(periodStart: Date, periodEnd: Date) {
-  return {
-    periodStart: dayStart(toDayString(periodStart)),
-    periodEnd: dayEnd(toDayString(periodEnd)),
   }
 }
 
@@ -335,7 +320,7 @@ function buildCalculatedData(
   totals: MainCalculationTotals,
 ) {
   return {
-    calculationDate: input.calculationDate,
+    calculationDate: canonicalizeCalendarDate(input.calculationDate),
     totalTabil: input.totalTabil,
     dailyCalculationId: input.dailyCalculationId,
     interest: totals.interest,

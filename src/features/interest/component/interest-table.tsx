@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { formatCalendarDate } from '#/lib/calendar-date'
 import { PencilIcon, Trash2Icon } from 'lucide-react'
 
 import type { InterestRecord } from '#/features/interest/interest.types'
@@ -90,7 +90,7 @@ export function InterestTable({
                 )}
               </TableCell>
               <TableCell>
-                {format(new Date(record.date), 'dd MMM yyyy')}
+                {formatCalendarDate(record.date)}
               </TableCell>
               <TableCell className="sticky right-0 z-10 border-l border-border bg-card">
                 <div className="flex items-center justify-end gap-1">

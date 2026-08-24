@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { formatCalendarDate } from '#/lib/calendar-date'
 
 import type { CsvJinisCharaPreviewRow } from './admin.csv'
 import { DEFAULT_JINISCHARA_PERCENTAGE } from '#/features/jinischara/jinischara.utils'
@@ -20,7 +20,7 @@ import {
 
 function formatPreviewDate(value: string | null) {
   if (!value) return '—'
-  return format(new Date(`${value}T00:00:00`), 'dd MMM yyyy')
+  return formatCalendarDate(value)
 }
 
 export function AdminJinisCharaPreviewTable({

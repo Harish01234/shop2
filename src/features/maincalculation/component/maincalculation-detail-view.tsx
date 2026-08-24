@@ -1,7 +1,8 @@
-import { format } from 'date-fns'
 import { ArrowLeftIcon, PencilIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Link, getRouteApi } from '@tanstack/react-router'
+
+import { formatCalendarDate } from '#/lib/calendar-date'
 
 import { MainCalculationModal } from '#/features/maincalculation/component/maincalculation-modal'
 import { useMainCalculationDetail } from '#/features/maincalculation/maincalculation.hooks'
@@ -122,10 +123,7 @@ export function MainCalculationDetailView({
     )
   }
 
-  const calculationDateLabel = format(
-    new Date(record.calculationDate),
-    'dd MMM yyyy',
-  )
+  const calculationDateLabel = formatCalendarDate(record.calculationDate)
   const periodLabel = formatPeriod(
     record.dailyCalculation.periodStart,
     record.dailyCalculation.periodEnd,

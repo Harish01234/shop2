@@ -1,35 +1,65 @@
 import { z } from 'zod'
 
 import { listPaginationSchema } from '#/lib/pagination'
+import {
+  calendarDateField,
+  optionalCalendarDateField,
+  optionalNonNegativeNumber,
+  optionalNullableText,
+  optionalText,
+  requiredPositiveInt,
+  requiredText,
+} from '#/lib/form-schema'
 import { DEFAULT_JINISCHARA_PERCENTAGE } from './jinischara.utils'
 
 export const createJinisCharaSchema = z.object({
-  slNo: z.number().int().positive(),
-  name: z.string().trim().min(1),
-  fatherName: z.string().trim().min(1),
-  phoneNo: z.string().trim().min(1),
-  credit: z.number().int().positive(),
-  percentage: z
-    .number()
-    .nonnegative()
-    .optional()
-    .default(DEFAULT_JINISCHARA_PERCENTAGE),
-  description: z.string().trim().optional(),
-  date: z.coerce.date(),
+  slNo: requiredPositiveInt(
+    'Enter serial no',
+    'Serial no must be a whole number greater than 0',
+  ),
+  name: requiredText('Enter a name'),
+  fatherName: requiredText('Enter father name'),
+  phoneNo: requiredText('Enter phone number'),
+  credit: requiredPositiveInt(
+    'Enter credit',
+    'Credit must be a whole number greater than 0',
+  ),
+  percentage: z.preprocess((value) => {
+    if (value === '' || value === null || value === undefined) {
+      return DEFAULT_JINISCHARA_PERCENTAGE
+    }
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : DEFAULT_JINISCHARA_PERCENTAGE
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      return Number.isFinite(parsed)
+        ? parsed
+        : DEFAULT_JINISCHARA_PERCENTAGE
+    }
+    return DEFAULT_JINISCHARA_PERCENTAGE
+  }, z.number().nonnegative('Enter a number 0 or greater')),
+  description: optionalText,
+  date: calendarDateField,
   active: z.boolean().default(true),
 })
 
 export const updateJinisCharaSchema = z.object({
   id: z.string().min(1),
-
-  slNo: z.number().int().positive().optional(),
-  name: z.string().trim().min(1).optional(),
-  fatherName: z.string().trim().min(1).optional(),
-  phoneNo: z.string().trim().min(1).optional(),
-  credit: z.number().int().positive().optional(),
-  percentage: z.number().nonnegative().optional(),
-  description: z.string().trim().nullable().optional(),
-  date: z.coerce.date().optional(),
+  slNo: requiredPositiveInt(
+    'Enter serial no',
+    'Serial no must be a whole number greater than 0',
+  ).optional(),
+  name: requiredText('Enter a name').optional(),
+  fatherName: requiredText('Enter father name').optional(),
+  phoneNo: requiredText('Enter phone number').optional(),
+  credit: requiredPositiveInt(
+    'Enter credit',
+    'Credit must be a whole number greater than 0',
+  ).optional(),
+  percentage: optionalNonNegativeNumber,
+  description: optionalNullableText,
+  date: optionalCalendarDateField,
   active: z.boolean().optional(),
   settledAt: z.coerce.date().nullable().optional(),
 })

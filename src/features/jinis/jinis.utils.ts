@@ -1,13 +1,15 @@
 import type { JinisItemInput } from './jinis.types'
 
-export function sumJinisWeights(items: JinisItemInput[]) {
+export function sumJinisWeights(
+  items: Array<{ type: JinisItemInput['type']; wet?: unknown }>,
+) {
   return {
     goldWeight: items
       .filter((item) => item.type === 'GOLD')
-      .reduce((total, item) => total + item.wet, 0),
+      .reduce((total, item) => total + (Number(item.wet) || 0), 0),
     silverWeight: items
       .filter((item) => item.type === 'SILVER')
-      .reduce((total, item) => total + item.wet, 0),
+      .reduce((total, item) => total + (Number(item.wet) || 0), 0),
   }
 }
 
@@ -15,9 +17,4 @@ export function formatJinisCredit(value: number) {
   return `₹${value.toLocaleString('en-IN')}`
 }
 
-export function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
+export { getErrorMessage } from '#/lib/form-error'

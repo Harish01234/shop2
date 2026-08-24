@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useServerFn } from '@tanstack/react-start'
 
+import { refetchDailyCalculations } from '#/features/dailycalculation/dailycalculation.queries'
 import { refetchJinisLists } from '#/features/jinis/jinis.queries'
 import { refetchJinisCharaLists } from '#/features/jinischara/jinischara.queries'
 import {
@@ -42,13 +43,16 @@ export function useCreateInterest() {
   return useMutation({
     mutationFn: (data: CreateInterestInput) => createInterestFn({ data }),
     onSuccess: async (_record, input) => {
-      await refetchInterestLists(queryClient)
-      if (input.settle && input.jinisId) {
-        await refetchJinisLists(queryClient)
-      }
-      if (input.settle && input.jinisCharaId) {
-        await refetchJinisCharaLists(queryClient)
-      }
+      await Promise.all([
+        refetchInterestLists(queryClient),
+        refetchDailyCalculations(queryClient),
+        input.settle && input.jinisId
+          ? refetchJinisLists(queryClient)
+          : Promise.resolve(),
+        input.settle && input.jinisCharaId
+          ? refetchJinisCharaLists(queryClient)
+          : Promise.resolve(),
+      ])
       toast.add({
         title: 'Interest created successfully',
         type: 'success',
@@ -71,7 +75,10 @@ export function useUpdateInterest() {
   return useMutation({
     mutationFn: (data: UpdateInterestInput) => updateInterestFn({ data }),
     onSuccess: async () => {
-      await refetchInterestLists(queryClient)
+      await Promise.all([
+        refetchInterestLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
       toast.add({
         title: 'Interest updated successfully',
         type: 'success',
@@ -95,7 +102,10 @@ export function useDeleteInterest() {
     mutationFn: (record: InterestRecord) =>
       deleteInterestFn({ data: { id: record.id } }),
     onSuccess: async () => {
-      await refetchInterestLists(queryClient)
+      await Promise.all([
+        refetchInterestLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
       toast.add({
         title: 'Interest deleted successfully',
         type: 'success',

@@ -1,16 +1,20 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import type { z } from 'zod'
 import { AlertCircleIcon } from 'lucide-react'
 
 import {
   useCreateJinisChara,
   useUpdateJinisChara,
 } from '#/features/jinischara/jinischara.hooks'
-import {
-  createJinisCharaSchema,
-  updateJinisCharaSchema,
-} from '#/features/jinischara/jinischara.schema'
+import { createJinisCharaSchema } from '#/features/jinischara/jinischara.schema'
 import type { JinisCharaRecord } from '#/features/jinischara/jinischara.types'
-import { getErrorMessage, DEFAULT_JINISCHARA_PERCENTAGE } from '#/features/jinischara/jinischara.utils'
+import {
+  getErrorMessage,
+  DEFAULT_JINISCHARA_PERCENTAGE,
+} from '#/features/jinischara/jinischara.utils'
+import { toDateInput } from '#/lib/calendar-date'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,14 +23,16 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  RequiredMark,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-
-function toDateInput(value: Date | string) {
-  return new Date(value).toISOString().slice(0, 10)
-}
 
 type JinisCharaFormProps = {
   jinisChara?: JinisCharaRecord
@@ -43,58 +49,48 @@ export function JinisCharaForm({
   const createMutation = useCreateJinisChara()
   const updateMutation = useUpdateJinisChara()
   const saving = createMutation.isPending || updateMutation.isPending
+  const [serverError, setServerError] = useState<string | null>(null)
 
-  const [slNo, setSlNo] = useState(jinisChara ? String(jinisChara.slNo) : '')
-  const [name, setName] = useState(jinisChara?.name ?? '')
-  const [fatherName, setFatherName] = useState(jinisChara?.fatherName ?? '')
-  const [phoneNo, setPhoneNo] = useState(jinisChara?.phoneNo ?? '')
-  const [credit, setCredit] = useState(jinisChara ? String(jinisChara.credit) : '')
-  const [percentage, setPercentage] = useState(
-    jinisChara ? String(jinisChara.percentage) : String(DEFAULT_JINISCHARA_PERCENTAGE),
-  )
-  const [description, setDescription] = useState(jinisChara?.description ?? '')
-  const [date, setDate] = useState(
-    jinisChara ? toDateInput(jinisChara.date) : toDateInput(new Date()),
-  )
-  const [error, setError] = useState<string | null>(null)
+  const form = useForm<
+    z.input<typeof createJinisCharaSchema>,
+    unknown,
+    z.output<typeof createJinisCharaSchema>
+  >({
+    resolver: zodResolver(createJinisCharaSchema),
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
+    defaultValues: {
+      slNo: jinisChara?.slNo,
+      name: jinisChara?.name ?? '',
+      fatherName: jinisChara?.fatherName ?? '',
+      phoneNo: jinisChara?.phoneNo ?? '',
+      credit: jinisChara?.credit,
+      percentage: jinisChara?.percentage ?? DEFAULT_JINISCHARA_PERCENTAGE,
+      description: jinisChara?.description ?? '',
+      date: toDateInput(jinisChara?.date) || toDateInput(new Date()),
+      active: jinisChara?.active ?? true,
+    },
+  })
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    setError(null)
-
-    const payload = {
-      slNo: Number(slNo),
-      name,
-      fatherName,
-      phoneNo,
-      credit: Number(credit),
-      percentage: percentage.trim()
-        ? Number(percentage)
-        : DEFAULT_JINISCHARA_PERCENTAGE,
-      description: description.trim() || undefined,
-      date: new Date(date),
-    }
-
+  async function onSubmit(values: z.output<typeof createJinisCharaSchema>) {
+    setServerError(null)
     try {
       if (isEdit && jinisChara) {
-        const parsed = updateJinisCharaSchema.parse({
-          id: jinisChara.id,
-          ...payload,
-        })
-        await updateMutation.mutateAsync(parsed)
+        await updateMutation.mutateAsync({ id: jinisChara.id, ...values })
       } else {
-        const parsed = createJinisCharaSchema.parse(payload)
-        await createMutation.mutateAsync(parsed)
+        await createMutation.mutateAsync(values)
       }
       onSuccess()
     } catch (caught) {
-      setError(getErrorMessage(caught, 'Could not save this JinisChara.'))
+      setServerError(getErrorMessage(caught, 'Could not save this JinisChara.'))
     }
   }
 
+  const errors = form.formState.errors
+
   return (
     <form
-      onSubmit={(event) => void handleSubmit(event)}
+      onSubmit={form.handleSubmit((values) => void onSubmit(values))}
       className="flex flex-col gap-4"
     >
       <Card className="shadow-none ring-foreground/10">
@@ -103,95 +99,102 @@ export function JinisCharaForm({
         </CardHeader>
         <CardContent>
           <FieldGroup className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="slNo">Serial no</FieldLabel>
+            <Field data-invalid={Boolean(errors.slNo) || undefined}>
+              <FieldLabel htmlFor="slNo">
+                Serial no <RequiredMark />
+              </FieldLabel>
               <Input
                 id="slNo"
                 type="number"
                 min="1"
-                required
-                value={slNo}
-                onChange={(event) => setSlNo(event.target.value)}
+                aria-invalid={Boolean(errors.slNo)}
+                {...form.register('slNo')}
               />
+              <FieldError errors={[errors.slNo]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="date">Date</FieldLabel>
+            <Field data-invalid={Boolean(errors.date) || undefined}>
+              <FieldLabel htmlFor="date">
+                Date <RequiredMark />
+              </FieldLabel>
               <Input
                 id="date"
                 type="date"
-                required
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
+                aria-invalid={Boolean(errors.date)}
+                {...form.register('date')}
               />
+              <FieldError errors={[errors.date]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="name">Name</FieldLabel>
+            <Field data-invalid={Boolean(errors.name) || undefined}>
+              <FieldLabel htmlFor="name">
+                Name <RequiredMark />
+              </FieldLabel>
               <Input
                 id="name"
-                required
-                value={name}
-                onChange={(event) => setName(event.target.value)}
+                aria-invalid={Boolean(errors.name)}
+                {...form.register('name')}
               />
+              <FieldError errors={[errors.name]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="fatherName">Father name</FieldLabel>
+            <Field data-invalid={Boolean(errors.fatherName) || undefined}>
+              <FieldLabel htmlFor="fatherName">
+                Father name <RequiredMark />
+              </FieldLabel>
               <Input
                 id="fatherName"
-                required
-                value={fatherName}
-                onChange={(event) => setFatherName(event.target.value)}
+                aria-invalid={Boolean(errors.fatherName)}
+                {...form.register('fatherName')}
               />
+              <FieldError errors={[errors.fatherName]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="phoneNo">Phone</FieldLabel>
+            <Field data-invalid={Boolean(errors.phoneNo) || undefined}>
+              <FieldLabel htmlFor="phoneNo">
+                Phone <RequiredMark />
+              </FieldLabel>
               <Input
                 id="phoneNo"
-                required
-                value={phoneNo}
-                onChange={(event) => setPhoneNo(event.target.value)}
+                aria-invalid={Boolean(errors.phoneNo)}
+                {...form.register('phoneNo')}
               />
+              <FieldError errors={[errors.phoneNo]} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="credit">Loan amount</FieldLabel>
+            <Field data-invalid={Boolean(errors.credit) || undefined}>
+              <FieldLabel htmlFor="credit">
+                Loan amount <RequiredMark />
+              </FieldLabel>
               <Input
                 id="credit"
                 type="number"
                 min="1"
-                required
-                value={credit}
-                onChange={(event) => setCredit(event.target.value)}
+                aria-invalid={Boolean(errors.credit)}
+                {...form.register('credit')}
               />
+              <FieldError errors={[errors.credit]} />
             </Field>
-            <Field>
+            <Field data-invalid={Boolean(errors.percentage) || undefined}>
               <FieldLabel htmlFor="percentage">Percentage</FieldLabel>
               <Input
                 id="percentage"
                 type="number"
                 min="0"
                 step="0.01"
-                required
-                value={percentage}
-                onChange={(event) => setPercentage(event.target.value)}
+                aria-invalid={Boolean(errors.percentage)}
+                {...form.register('percentage')}
               />
+              <FieldError errors={[errors.percentage]} />
             </Field>
             <Field className="sm:col-span-2">
               <FieldLabel htmlFor="description">Description</FieldLabel>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Optional notes"
-              />
+              <Textarea id="description" placeholder="Optional notes" {...form.register('description')} />
             </Field>
           </FieldGroup>
         </CardContent>
       </Card>
 
-      {error ? (
+      {serverError ? (
         <Alert variant="destructive">
           <AlertCircleIcon />
           <AlertTitle>Could not save</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{serverError}</AlertDescription>
         </Alert>
       ) : null}
 

@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { formatCalendarDate } from '#/lib/calendar-date'
 import { PencilIcon, Trash2Icon } from 'lucide-react'
 
 import type { JinisRecord } from '#/features/jinis/jinis.types'
@@ -93,7 +93,7 @@ export function JinisTable({
               <TableCell>{record.silverWeight.toFixed(2)}</TableCell>
               <TableCell>{record.credit.toLocaleString('en-IN')}</TableCell>
               <TableCell>
-                {format(new Date(record.date), 'dd MMM yyyy')}
+                {formatCalendarDate(record.date)}
               </TableCell>
               <TableCell>
                 <Badge variant={record.active ? 'default' : 'secondary'}>

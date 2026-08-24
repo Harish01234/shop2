@@ -1,3 +1,11 @@
+import { refreshAllDailyCalculationTotals, refreshDailyCalculationsForDates } from '#/features/dailycalculation/dailycalculation.server'
+import {
+  canonicalizeCalendarDate,
+  dayEnd,
+  dayStart,
+  toCalendarDay,
+  toDateInput,
+} from '#/lib/calendar-date'
 import { DEFAULT_JINISCHARA_PERCENTAGE } from '#/features/jinischara/jinischara.utils'
 
 import { prisma } from '#/db'
@@ -133,13 +141,16 @@ export async function importJinisCsv(
         phoneNo: row.phoneNo,
         credit: row.credit,
         type: 'UNKNOWN',
-        date: row.date,
+        date: canonicalizeCalendarDate(row.date),
         active: true,
         goldWeight: 0,
         silverWeight: 0,
         createdById,
       })),
     })
+    await refreshDailyCalculationsForDates(
+      toCreate.map((row) => canonicalizeCalendarDate(row.date)),
+    )
   }
 
   return {
@@ -172,13 +183,16 @@ export async function importJinisCharaCsv(
           credit: row.credit,
           percentage: row.percentage ?? DEFAULT_JINISCHARA_PERCENTAGE,
           description: row.description ?? null,
-          date: row.date,
+          date: canonicalizeCalendarDate(row.date),
           active: true,
           settledAt: null,
           createdById,
         })),
       })
     })
+    await refreshDailyCalculationsForDates(
+      toCreate.map((row) => canonicalizeCalendarDate(row.date)),
+    )
   }
 
   return {
@@ -188,7 +202,7 @@ export async function importJinisCharaCsv(
 }
 
 export async function deleteAllJinisCharaRecords() {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const payments = await tx.interest.deleteMany({
       where: { jinisCharaId: { not: null } },
     })
@@ -199,10 +213,12 @@ export async function deleteAllJinisCharaRecords() {
       paymentsDeleted: payments.count,
     }
   })
+  await refreshAllDailyCalculationTotals()
+  return result
 }
 
 export async function deleteAllJinisRecords() {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const payments = await tx.interest.deleteMany({
       where: { jinisId: { not: null } },
     })
@@ -213,6 +229,8 @@ export async function deleteAllJinisRecords() {
       paymentsDeleted: payments.count,
     }
   })
+  await refreshAllDailyCalculationTotals()
+  return result
 }
 
 function csvEscape(value: unknown) {
@@ -236,15 +254,9 @@ function toCsv(rows: Array<Record<string, unknown>>) {
   return `${lines.join('\n')}\n`
 }
 
-function endOfDay(date: Date) {
-  const next = new Date(date)
-  next.setHours(23, 59, 59, 999)
-  return next
-}
-
 export async function exportAdminData(input: AdminExportInput) {
-  const from = input.from
-  const to = endOfDay(input.to)
+  const from = dayStart(toCalendarDay(input.from))
+  const to = dayEnd(toCalendarDay(input.to))
 
   let rows: Array<Record<string, unknown>> = []
 
@@ -317,7 +329,7 @@ export async function exportAdminData(input: AdminExportInput) {
     }))
   }
 
-  const stamp = new Date().toISOString().slice(0, 10)
+  const stamp = toDateInput(new Date())
   if (input.format === 'json') {
     return {
       filename: `${input.type}-${stamp}.json`,

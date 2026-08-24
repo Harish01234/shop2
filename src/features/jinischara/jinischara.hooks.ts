@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useServerFn } from '@tanstack/react-start'
 
+import { refetchDailyCalculations } from '#/features/dailycalculation/dailycalculation.queries'
 import {
   createJinisChara,
   deleteJinisChara,
@@ -48,7 +49,10 @@ export function useCreateJinisChara() {
   return useMutation({
     mutationFn: (data: CreateJinisCharaInput) => createJinisCharaFn({ data }),
     onSuccess: async () => {
-      await refetchJinisCharaLists(queryClient)
+      await Promise.all([
+        refetchJinisCharaLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
       toast.add({
         title: 'JinisChara created successfully',
         type: 'success',
@@ -71,7 +75,10 @@ export function useUpdateJinisChara() {
   return useMutation({
     mutationFn: (data: UpdateJinisCharaInput) => updateJinisCharaFn({ data }),
     onSuccess: async () => {
-      await refetchJinisCharaLists(queryClient)
+      await Promise.all([
+        refetchJinisCharaLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
       toast.add({
         title: 'JinisChara updated successfully',
         type: 'success',
@@ -95,7 +102,10 @@ export function useDeleteJinisChara() {
     mutationFn: (record: JinisCharaRecord) =>
       deleteJinisCharaFn({ data: { id: record.id } }),
     onSuccess: async () => {
-      await refetchJinisCharaLists(queryClient)
+      await Promise.all([
+        refetchJinisCharaLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
       toast.add({
         title: 'JinisChara deleted successfully',
         type: 'success',
@@ -131,7 +141,10 @@ export function useToggleJinisChara() {
         },
       }),
     onSuccess: async () => {
-      await refetchJinisCharaLists(queryClient)
+      await Promise.all([
+        refetchJinisCharaLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
     },
     onError: () => {
       toast.add({

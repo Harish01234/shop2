@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { formatCalendarDate } from '#/lib/calendar-date'
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronDownIcon, FilterIcon, XIcon } from 'lucide-react'
 
@@ -39,9 +39,8 @@ type AdvanceSearchFilterProps = {
 
 function formatFilterDate(value?: string) {
   if (!value) return null
-  const date = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return value
-  return format(date, 'dd MMM yyyy')
+  const formatted = formatCalendarDate(value, '')
+  return formatted || value
 }
 
 function rangeTip(filters: JinisCharaFilterValues) {

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { AlertCircleIcon } from 'lucide-react'
 
+import { parseDateInput } from '#/lib/calendar-date'
+import { DEFAULT_JINISCHARA_PERCENTAGE } from '#/features/jinischara/jinischara.utils'
 import { AdminJinisCharaPreviewTable } from '#/features/admin/admin-jinischara-preview-table'
 import {
   parseJinisCharaCsv,
@@ -83,12 +85,9 @@ function AdminJinisCharaMigrationPage() {
           fatherName: row.fatherName,
           phoneNo: row.phoneNo,
           credit: row.credit as number,
-          ...(row.percentage != null ? { percentage: row.percentage } : {}),
+          percentage: row.percentage ?? DEFAULT_JINISCHARA_PERCENTAGE,
           description: row.description ?? undefined,
-          date: new Date(`${row.date}T00:00:00`),
-          settledAt: row.settledAt
-            ? new Date(`${row.settledAt}T00:00:00`)
-            : null,
+          date: parseDateInput(String(row.date)),
         })),
       })
       if (result.imported > 0) {

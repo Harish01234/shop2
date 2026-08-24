@@ -5,6 +5,7 @@ import {
   listQueryDefaults,
   previewQueryDefaults,
 } from '#/lib/query-options'
+import { parseDateInput } from '#/lib/calendar-date'
 
 import {
   listDailyCalculation,
@@ -61,8 +62,8 @@ export function previewDailyCalculationQueryOptions(
     queryFn: () =>
       previewDailyCalculation({
         data: {
-          periodStart: new Date(`${periodStart}T00:00:00`),
-          periodEnd: new Date(`${periodEnd}T00:00:00`),
+          periodStart: parseDateInput(periodStart),
+          periodEnd: parseDateInput(periodEnd),
           tabil: 0,
           cashInHome: 0,
           cashInShop: 0,
@@ -95,6 +96,10 @@ export function dailyCalculationDetailQueryOptions(id: string) {
 
 export function refetchDailyCalculationLists(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: dailyCalculationKeys.lists() })
+}
+
+export function refetchDailyCalculations(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: dailyCalculationKeys.all })
 }
 
 export function refetchDailyCalculationDetail(

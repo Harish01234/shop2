@@ -1,6 +1,9 @@
-import { format } from 'date-fns'
+import { formatCalendarDate } from '#/lib/calendar-date'
 
 import type { MainCalculationBalanceStatus } from './maincalculation.types'
+
+export { getErrorMessage } from '#/lib/form-error'
+export { toDateInput } from '#/lib/calendar-date'
 
 export function deriveMainCalculationTotals(input: {
   totalTabil: number
@@ -23,27 +26,12 @@ export function deriveMainCalculationTotals(input: {
   }
 }
 
-export function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
-
-export function toDateInput(value: Date | string) {
-  const date = new Date(value)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 export function formatMoney(value: number) {
   return value.toLocaleString('en-IN')
 }
 
 export function formatPeriod(start: Date | string, end: Date | string) {
-  return `${format(new Date(start), 'dd MMM yyyy')} – ${format(new Date(end), 'dd MMM yyyy')}`
+  return `${formatCalendarDate(start)} – ${formatCalendarDate(end)}`
 }
 
 export function balanceStatusBadgeClass(status: MainCalculationBalanceStatus) {

@@ -1,9 +1,4 @@
-export function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
+export { getErrorMessage } from '#/lib/form-error'
 
 export function interestLinkLabel(record: {
   personName: string | null

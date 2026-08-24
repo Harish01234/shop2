@@ -1,5 +1,7 @@
 import { prisma } from '#/db'
 import type { InterestWhereInput } from '#/generated/prisma/models/Interest'
+import { refreshDailyCalculationsForDates } from '#/features/dailycalculation/dailycalculation.server'
+import { canonicalizeCalendarDate, dayEnd, dayStart } from '#/lib/calendar-date'
 import { paginationArgs } from '#/lib/pagination'
 
 import type {
@@ -25,14 +27,6 @@ const relatedSelect = {
     },
   },
 } as const
-
-function dayStart(value: string) {
-  return new Date(`${value}T00:00:00`)
-}
-
-function dayEnd(value: string) {
-  return new Date(`${value}T23:59:59.999`)
-}
 
 async function assertInterestTargets(data: {
   jinisId?: string | null
@@ -153,14 +147,15 @@ export async function createInterestRecord(
   createdById: string,
 ) {
   const settle = Boolean(data.settle)
+  const date = canonicalizeCalendarDate(data.date)
 
   if (!settle) {
     await assertInterestTargets(data)
 
-    return prisma.interest.create({
+    const interest = await prisma.interest.create({
       data: {
         amount: data.amount,
-        date: data.date,
+        date,
         remarks: data.remarks || null,
         jinisId: data.jinisId,
         jinisCharaId: data.jinisCharaId,
@@ -169,9 +164,12 @@ export async function createInterestRecord(
       },
       include: relatedSelect,
     })
+
+    await refreshDailyCalculationsForDates([interest.date])
+    return interest
   }
 
-  return prisma.$transaction(async (tx) => {
+  const interest = await prisma.$transaction(async (tx) => {
     if (data.jinisId) {
       const jinis = await tx.jinis.findUnique({
         where: { id: data.jinisId },
@@ -192,10 +190,10 @@ export async function createInterestRecord(
       }
     }
 
-    const interest = await tx.interest.create({
+    const created = await tx.interest.create({
       data: {
         amount: data.amount,
-        date: data.date,
+        date,
         remarks: data.remarks || null,
         jinisId: data.jinisId,
         jinisCharaId: data.jinisCharaId,
@@ -205,7 +203,7 @@ export async function createInterestRecord(
       include: relatedSelect,
     })
 
-    const settledAt = new Date()
+    const settledAt = canonicalizeCalendarDate(new Date())
 
     if (data.jinisId) {
       await tx.jinis.update({
@@ -227,8 +225,14 @@ export async function createInterestRecord(
       })
     }
 
-    return interest
+    return { created, settledAt }
   })
+
+  await refreshDailyCalculationsForDates([
+    interest.created.date,
+    interest.settledAt,
+  ])
+  return interest.created
 }
 
 export async function updateInterestRecord(data: UpdateInterestInput) {
@@ -243,11 +247,16 @@ export async function updateInterestRecord(data: UpdateInterestInput) {
   await assertInterestTargets(data)
 
   const { id, ...fields } = data
+  const date =
+    fields.date === undefined
+      ? undefined
+      : canonicalizeCalendarDate(fields.date)
 
-  return prisma.interest.update({
+  const record = await prisma.interest.update({
     where: { id },
     data: {
       ...fields,
+      ...(date ? { date } : {}),
       ...(fields.remarks !== undefined
         ? { remarks: fields.remarks || null }
         : {}),
@@ -257,6 +266,9 @@ export async function updateInterestRecord(data: UpdateInterestInput) {
     },
     include: relatedSelect,
   })
+
+  await refreshDailyCalculationsForDates([existing.date, record.date])
+  return record
 }
 
 export async function deleteInterestRecord(data: InterestIdInput) {
@@ -272,6 +284,7 @@ export async function deleteInterestRecord(data: InterestIdInput) {
     where: { id: data.id },
   })
 
+  await refreshDailyCalculationsForDates([existing.date])
   return { id: data.id }
 }
 
