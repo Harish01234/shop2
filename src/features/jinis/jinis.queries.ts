@@ -50,7 +50,9 @@ export function jinisLinkOptionsQueryOptions(query = '') {
       listJinisOptions({ data: { query: query || undefined } }) as Promise<
         JinisLinkOption[]
       >,
-    ...listQueryDefaults,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   })
 }
 

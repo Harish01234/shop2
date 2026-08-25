@@ -11,6 +11,7 @@ import {
   LINK_OPTIONS_LIMIT,
   paginationArgs,
 } from '#/lib/pagination'
+import { buildLinkOptionsSearchWhere } from '#/lib/link-options-search'
 
 import { sumJinisWeights } from './jinis.utils'
 import type {
@@ -141,23 +142,10 @@ export async function listJinisRecords(data: ListJinisInput) {
 }
 
 export async function listJinisLinkOptions(query?: string) {
-  const trimmed = query?.trim()
-  const filters: JinisWhereInput[] = []
-
-  if (trimmed) {
-    const asNumber = Number(trimmed)
-    filters.push({
-      OR: [
-        { name: { contains: trimmed, mode: 'insensitive' } },
-        ...(Number.isInteger(asNumber) && String(asNumber) === trimmed
-          ? [{ slNo: asNumber }]
-          : []),
-      ],
-    })
-  }
+  const where = await buildLinkOptionsSearchWhere('Jinis', query)
 
   return prisma.jinis.findMany({
-    where: filters.length ? { AND: filters } : undefined,
+    where,
     select: {
       id: true,
       slNo: true,

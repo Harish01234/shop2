@@ -69,23 +69,6 @@ function formatLinkOption(item: LinkOption) {
   return `#${item.slNo} · ${item.name}`
 }
 
-function filterLinkOption(
-  item: LinkOption,
-  query: string,
-  itemToString?: (item: LinkOption) => string,
-) {
-  const q = query.trim().toLowerCase()
-  if (!q) return true
-
-  const numeric = q.replace(/^#/, '')
-  if (numeric !== '' && /^\d+$/.test(numeric)) {
-    return String(item.slNo).includes(numeric)
-  }
-
-  if (item.name.toLowerCase().includes(q)) return true
-  return (itemToString?.(item) ?? formatLinkOption(item)).toLowerCase().includes(q)
-}
-
 function InterestLinkCombobox({
   id,
   value,
@@ -118,9 +101,7 @@ function InterestLinkCombobox({
       itemToStringLabel={formatLinkOption}
       itemToStringValue={(item) => item.id}
       isItemEqualToValue={(a, b) => a.id === b.id}
-      filter={filterLinkOption}
       autoHighlight
-      limit={100}
       disabled={disabled}
     >
       <ComboboxTrigger
@@ -226,12 +207,21 @@ export function InterestForm({
     return () => window.clearTimeout(timer)
   }, [linkQuery])
 
+  const shouldFetchJinisOptions =
+    !asolContext &&
+    linkType === 'jinis' &&
+    (debouncedLinkQuery.trim().length > 0 || Boolean(interest?.jinisId))
+  const shouldFetchJinisCharaOptions =
+    !asolContext &&
+    linkType === 'jinischara' &&
+    (debouncedLinkQuery.trim().length > 0 || Boolean(interest?.jinisCharaId))
+
   const jinisQuery = useJinisLinkOptions(
-    !asolContext && linkType === 'jinis',
+    shouldFetchJinisOptions,
     debouncedLinkQuery,
   )
   const jinisCharaQuery = useJinisCharaLinkOptions(
-    !asolContext && linkType === 'jinischara',
+    shouldFetchJinisCharaOptions,
     debouncedLinkQuery,
   )
   const jinisOptions = mergeLinkOption(jinisQuery.data ?? [], interest?.jinis)
@@ -384,10 +374,16 @@ export function InterestForm({
                       onValueChange={field.onChange}
                       options={jinisOptions}
                       placeholder={
-                        jinisQuery.isLoading ? 'Loading…' : 'Select Jinis'
+                        jinisQuery.isLoading
+                          ? 'Loading…'
+                          : 'Search SL no or name'
                       }
-                      searchPlaceholder="Search sl no or name"
-                      emptyText="No Jinis found."
+                      searchPlaceholder="Search SL no or name"
+                      emptyText={
+                        debouncedLinkQuery.trim()
+                          ? 'No Jinis found.'
+                          : 'Type SL no or name to search all Jinis.'
+                      }
                       disabled={jinisQuery.isLoading}
                       onQueryChange={setLinkQuery}
                     />
@@ -413,10 +409,14 @@ export function InterestForm({
                       placeholder={
                         jinisCharaQuery.isLoading
                           ? 'Loading…'
-                          : 'Select JinisChara'
+                          : 'Search SL no or name'
                       }
-                      searchPlaceholder="Search sl no or name"
-                      emptyText="No JinisChara found."
+                      searchPlaceholder="Search SL no or name"
+                      emptyText={
+                        debouncedLinkQuery.trim()
+                          ? 'No JinisChara found.'
+                          : 'Type SL no or name to search all JinisChara.'
+                      }
                       disabled={jinisCharaQuery.isLoading}
                       onQueryChange={setLinkQuery}
                     />

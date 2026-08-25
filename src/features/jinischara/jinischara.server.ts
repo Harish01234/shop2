@@ -11,6 +11,7 @@ import {
   LINK_OPTIONS_LIMIT,
   paginationArgs,
 } from '#/lib/pagination'
+import { buildLinkOptionsSearchWhere } from '#/lib/link-options-search'
 
 import type {
   CreateJinisCharaInput,
@@ -63,23 +64,10 @@ export async function listJinisCharaRecords(data: ListJinisCharaInput) {
 }
 
 export async function listJinisCharaLinkOptions(query?: string) {
-  const trimmed = query?.trim()
-  const filters: JinisCharaWhereInput[] = []
-
-  if (trimmed) {
-    const asNumber = Number(trimmed)
-    filters.push({
-      OR: [
-        { name: { contains: trimmed, mode: 'insensitive' } },
-        ...(Number.isInteger(asNumber) && String(asNumber) === trimmed
-          ? [{ slNo: asNumber }]
-          : []),
-      ],
-    })
-  }
+  const where = await buildLinkOptionsSearchWhere('JinisChara', query)
 
   return prisma.jinisChara.findMany({
-    where: filters.length ? { AND: filters } : undefined,
+    where,
     select: {
       id: true,
       slNo: true,
