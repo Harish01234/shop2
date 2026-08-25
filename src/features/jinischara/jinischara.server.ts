@@ -11,7 +11,7 @@ import {
   LINK_OPTIONS_LIMIT,
   paginationArgs,
 } from '#/lib/pagination'
-import { buildLinkOptionsSearchWhere } from '#/lib/link-options-search'
+import { buildLinkOptionsSearchWhere, withActiveLinkOptionsFilter } from '#/lib/link-options-search'
 
 import type {
   CreateJinisCharaInput,
@@ -64,7 +64,8 @@ export async function listJinisCharaRecords(data: ListJinisCharaInput) {
 }
 
 export async function listJinisCharaLinkOptions(query?: string) {
-  const where = await buildLinkOptionsSearchWhere('JinisChara', query)
+  const searchWhere = await buildLinkOptionsSearchWhere('JinisChara', query)
+  const where = withActiveLinkOptionsFilter(searchWhere)
 
   return prisma.jinisChara.findMany({
     where,

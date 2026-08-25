@@ -44,3 +44,11 @@ export async function buildLinkOptionsSearchWhere(
 
   return { OR: or }
 }
+
+/** Interest link dropdowns: open records only. */
+export function withActiveLinkOptionsFilter<T extends Record<string, unknown>>(
+  where: T | undefined,
+) {
+  if (!where) return { active: true }
+  return { AND: [{ active: true }, where] }
+}

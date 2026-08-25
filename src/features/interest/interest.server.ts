@@ -28,12 +28,20 @@ const relatedSelect = {
   },
 } as const
 
-async function assertInterestTargets(data: {
-  jinisId?: string | null
-  jinisCharaId?: string | null
-}) {
+const SETTLED_LINK_ERROR =
+  'This record is already settled and cannot receive further interest.'
+
+type InterestLinkClient = Pick<typeof prisma, 'jinis' | 'jinisChara'>
+
+async function assertInterestTargetsExist(
+  data: {
+    jinisId?: string | null
+    jinisCharaId?: string | null
+  },
+  db: InterestLinkClient = prisma,
+) {
   if (data.jinisId) {
-    const jinis = await prisma.jinis.findUnique({
+    const jinis = await db.jinis.findUnique({
       where: { id: data.jinisId },
       select: { id: true },
     })
@@ -43,7 +51,7 @@ async function assertInterestTargets(data: {
   }
 
   if (data.jinisCharaId) {
-    const jinisChara = await prisma.jinisChara.findUnique({
+    const jinisChara = await db.jinisChara.findUnique({
       where: { id: data.jinisCharaId },
       select: { id: true },
     })
@@ -51,6 +59,48 @@ async function assertInterestTargets(data: {
       throw new Error('JinisChara was not found.')
     }
   }
+}
+
+/** New Interest may only be linked to open (unsettled) Jinis / JinisChara. */
+async function assertOpenLinkForNewInterest(
+  data: {
+    jinisId?: string | null
+    jinisCharaId?: string | null
+  },
+  db: InterestLinkClient = prisma,
+) {
+  if (data.jinisId) {
+    const jinis = await db.jinis.findUnique({
+      where: { id: data.jinisId },
+      select: { id: true, active: true },
+    })
+    if (!jinis) {
+      throw new Error('Jinis was not found.')
+    }
+    if (!jinis.active) {
+      throw new Error(SETTLED_LINK_ERROR)
+    }
+  }
+
+  if (data.jinisCharaId) {
+    const jinisChara = await db.jinisChara.findUnique({
+      where: { id: data.jinisCharaId },
+      select: { id: true, active: true },
+    })
+    if (!jinisChara) {
+      throw new Error('JinisChara was not found.')
+    }
+    if (!jinisChara.active) {
+      throw new Error(SETTLED_LINK_ERROR)
+    }
+  }
+}
+
+async function assertInterestTargets(data: {
+  jinisId?: string | null
+  jinisCharaId?: string | null
+}) {
+  await assertInterestTargetsExist(data)
 }
 
 export async function listInterestRecords(data: ListInterestInput) {
@@ -150,7 +200,7 @@ export async function createInterestRecord(
   const date = canonicalizeCalendarDate(data.date)
 
   if (!settle) {
-    await assertInterestTargets(data)
+    await assertOpenLinkForNewInterest(data)
 
     const interest = await prisma.interest.create({
       data: {
@@ -170,25 +220,7 @@ export async function createInterestRecord(
   }
 
   const interest = await prisma.$transaction(async (tx) => {
-    if (data.jinisId) {
-      const jinis = await tx.jinis.findUnique({
-        where: { id: data.jinisId },
-        select: { id: true },
-      })
-      if (!jinis) {
-        throw new Error('Jinis was not found.')
-      }
-    }
-
-    if (data.jinisCharaId) {
-      const jinisChara = await tx.jinisChara.findUnique({
-        where: { id: data.jinisCharaId },
-        select: { id: true },
-      })
-      if (!jinisChara) {
-        throw new Error('JinisChara was not found.')
-      }
-    }
+    await assertOpenLinkForNewInterest(data, tx)
 
     const created = await tx.interest.create({
       data: {

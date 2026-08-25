@@ -11,7 +11,7 @@ import {
   LINK_OPTIONS_LIMIT,
   paginationArgs,
 } from '#/lib/pagination'
-import { buildLinkOptionsSearchWhere } from '#/lib/link-options-search'
+import { buildLinkOptionsSearchWhere, withActiveLinkOptionsFilter } from '#/lib/link-options-search'
 
 import { sumJinisWeights } from './jinis.utils'
 import type {
@@ -142,7 +142,8 @@ export async function listJinisRecords(data: ListJinisInput) {
 }
 
 export async function listJinisLinkOptions(query?: string) {
-  const where = await buildLinkOptionsSearchWhere('Jinis', query)
+  const searchWhere = await buildLinkOptionsSearchWhere('Jinis', query)
+  const where = withActiveLinkOptionsFilter(searchWhere)
 
   return prisma.jinis.findMany({
     where,

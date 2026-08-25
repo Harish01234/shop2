@@ -46,10 +46,8 @@ export function useCreateInterest() {
       await Promise.all([
         refetchInterestLists(queryClient),
         refetchDailyCalculations(queryClient),
-        input.settle && input.jinisId
-          ? refetchJinisLists(queryClient)
-          : Promise.resolve(),
-        input.settle && input.jinisCharaId
+        input.jinisId ? refetchJinisLists(queryClient) : Promise.resolve(),
+        input.jinisCharaId
           ? refetchJinisCharaLists(queryClient)
           : Promise.resolve(),
       ])
