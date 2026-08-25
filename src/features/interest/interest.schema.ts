@@ -6,7 +6,7 @@ import {
   optionalCalendarDateField,
   optionalNullableText,
   optionalText,
-  requiredPositiveInt,
+  requiredNonNegativeInt,
   requiredText,
 } from '#/lib/form-schema'
 
@@ -37,9 +37,9 @@ function hasInterestTarget(data: {
 
 export const createInterestSchema = z
   .object({
-    amount: requiredPositiveInt(
+    amount: requiredNonNegativeInt(
       'Enter amount',
-      'Amount must be a whole number greater than 0',
+      'Amount must be a whole number 0 or greater',
     ),
     date: calendarDateField,
     remarks: optionalText,
@@ -64,9 +64,9 @@ export const createInterestSchema = z
 
 export const updateInterestSchema = z.object({
   id: z.string().min(1),
-  amount: requiredPositiveInt(
+  amount: requiredNonNegativeInt(
     'Enter amount',
-    'Amount must be a whole number greater than 0',
+    'Amount must be a whole number 0 or greater',
   ).optional(),
   date: optionalCalendarDateField,
   remarks: optionalNullableText,

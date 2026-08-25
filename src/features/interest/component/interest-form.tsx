@@ -297,7 +297,7 @@ export function InterestForm({
               <Input
                 id="amount"
                 type="number"
-                min="1"
+                min="0"
                 aria-invalid={Boolean(errors.amount)}
                 {...form.register('amount')}
               />
