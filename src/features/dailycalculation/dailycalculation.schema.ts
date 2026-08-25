@@ -154,3 +154,13 @@ export const dailyCalculationSearchSchema = z.object({
   to: z.string().trim().optional(),
   page: z.coerce.number().int().positive().optional(),
 })
+
+export const dailyCalculationExportFormatSchema = z.enum(['pdf', 'xlsx'])
+
+export const dailyCalculationExportScopeSchema = z.enum(['summary', 'full'])
+
+export const exportDailyCalculationSchema = z.object({
+  id: z.string().min(1),
+  format: dailyCalculationExportFormatSchema,
+  scope: dailyCalculationExportScopeSchema,
+})

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 
 import { DailyCalculationModal } from '#/features/dailycalculation/component/dailycalculation-modal'
+import { DailyCalculationExportMenu } from '#/features/dailycalculation/component/dailycalculation-export-menu'
 import {
   useDailyCalculationDetail,
   useSyncDailyCalculationDetail,
@@ -416,6 +417,7 @@ export function DailyCalculationDetailView({
               <PencilIcon className="size-4" />
               Edit
             </Button>
+            <DailyCalculationExportMenu dailyCalculationId={dailyCalculationId} />
           </div>
           <div>
             <h1 className="font-heading text-2xl font-medium text-foreground">

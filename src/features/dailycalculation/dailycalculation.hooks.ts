@@ -7,6 +7,7 @@ import {
   closeDailyCalculation,
   createDailyCalculation,
   deleteDailyCalculation,
+  exportDailyCalculation,
   refreshDailyCalculation,
   updateDailyCalculation,
 } from './dailycalculation.functions'
@@ -26,9 +27,11 @@ import type {
   DailyCalculationIdInput,
   DailyCalculationRecord,
   DailyCalculationView,
+  ExportDailyCalculationInput,
   UpdateDailyCalculationInput,
 } from './dailycalculation.types'
 import { getErrorMessage } from './dailycalculation.utils'
+import { downloadBase64File } from '#/lib/download-file'
 import { toast } from '@/components/ui/toast'
 
 export function useDailyCalculationList(
@@ -182,6 +185,29 @@ export function useDeleteDailyCalculation() {
     onError: (error) => {
       toast.add({
         title: 'Could not delete Daily Calculation',
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      })
+    },
+  })
+}
+
+export function useExportDailyCalculation() {
+  const exportFn = useServerFn(exportDailyCalculation)
+
+  return useMutation({
+    mutationFn: (data: ExportDailyCalculationInput) => exportFn({ data }),
+    onSuccess: (file) => {
+      downloadBase64File(file)
+      toast.add({
+        title: 'Export ready',
+        description: file.filename,
+        type: 'success',
+      })
+    },
+    onError: (error) => {
+      toast.add({
+        title: 'Could not export',
         description: getErrorMessage(error, 'Please try again.'),
         type: 'error',
       })

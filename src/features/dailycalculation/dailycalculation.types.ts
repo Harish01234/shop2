@@ -11,6 +11,7 @@ import type {
   dailyCalculationRecordStatusSchema,
   dailyCalculationSearchSchema,
   dailyCalculationViewSchema,
+  exportDailyCalculationSchema,
   listDailyCalculationSchema,
   updateDailyCalculationSchema,
 } from './dailycalculation.schema'
@@ -142,3 +143,9 @@ export type DailyCalculationDetail = {
 }
 
 export type DailyCalculationListResult = PaginatedList<DailyCalculationRecord>
+
+export type ExportDailyCalculationInput = z.infer<
+  typeof exportDailyCalculationSchema
+>
+export type DailyCalculationExportFormat = ExportDailyCalculationInput['format']
+export type DailyCalculationExportScope = ExportDailyCalculationInput['scope']

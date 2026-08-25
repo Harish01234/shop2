@@ -6,9 +6,11 @@ import {
   closeDailyCalculationSchema,
   createDailyCalculationSchema,
   dailyCalculationIdSchema,
+  exportDailyCalculationSchema,
   listDailyCalculationSchema,
   updateDailyCalculationSchema,
 } from './dailycalculation.schema'
+import { exportDailyCalculationRecord } from './dailycalculation.export.server'
 import {
   closeDailyCalculationRecord,
   createDailyCalculationRecord,
@@ -123,4 +125,17 @@ export const deleteDailyCalculation = createServerFn({ method: 'POST' })
     }
 
     return result
+  })
+
+export const exportDailyCalculation = createServerFn({ method: 'POST' })
+  .middleware([requireUserMiddleware])
+  .validator(exportDailyCalculationSchema)
+  .handler(async ({ data }) => {
+    const file = await exportDailyCalculationRecord(data)
+
+    if (!file) {
+      throw notFound()
+    }
+
+    return file
   })
