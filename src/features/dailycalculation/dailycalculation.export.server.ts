@@ -1,11 +1,11 @@
 import { PassThrough } from 'node:stream'
 
 import ExcelJS from 'exceljs'
-import PDFDocument from 'pdfkit'
 
 import { prisma } from '#/db'
 import type { DownloadableFile } from '#/lib/download-file'
 import { formatCalendarDate, toDateInput } from '#/lib/calendar-date'
+import { getPDFDocument } from '#/lib/pdfkit.server'
 import type { MainCalculationRecord } from '#/features/maincalculation/maincalculation.types'
 
 import { getDailyCalculationDetailRecord } from './dailycalculation.server'
@@ -572,6 +572,7 @@ function renderPdfTable(
 }
 
 function renderPdf(payload: ExportPayload, scope: DailyCalculationExportScope) {
+  const PDFDocument = getPDFDocument()
   const landscape = scope === 'full'
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({

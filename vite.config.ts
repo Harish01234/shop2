@@ -45,7 +45,21 @@ const config = defineConfig({
   },
   plugins: [
     devtools({ removeDevtoolsOnBuild: true }),
-    nitro({ rollupConfig: { external: [/^@sentry\//] } }),
+    nitro({
+      // pdfkit reads standard fonts via package subpath imports (#standard-fonts/*).
+      // Bundling breaks those imports in serverless production (/var/task).
+      traceDeps: ['pdfkit*'],
+      rollupConfig: {
+        external: [
+          /^@sentry\//,
+          'pdfkit',
+          'fontkit',
+          'png-js',
+          'linebreak',
+          'fflate',
+        ],
+      },
+    }),
     tailwindcss(),
     tanstackStart(),
     viteReact(),
