@@ -9,6 +9,7 @@ import {
 } from './jinis.functions'
 import {
   activeJinisTotalQueryOptions,
+  jinisCalculatorLookupQueryOptions,
   jinisLinkOptionsQueryOptions,
   jinisListQueryOptions,
   jinisRecordQueryOptions,
@@ -35,6 +36,13 @@ export function useJinisList(
 export function useJinisLinkOptions(enabled = true, query = '') {
   return useQuery({
     ...jinisLinkOptionsQueryOptions(query),
+    enabled,
+  })
+}
+
+export function useJinisCalculatorLookup(enabled = true, query = '') {
+  return useQuery({
+    ...jinisCalculatorLookupQueryOptions(query),
     enabled,
   })
 }

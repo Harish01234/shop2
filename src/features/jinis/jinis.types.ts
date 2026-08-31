@@ -37,6 +37,12 @@ export type JinisLinkOption = {
   name: string
 }
 
+export type JinisCalculatorLookupOption = JinisLinkOption & {
+  credit: number
+  date: Date | string
+  active: boolean
+}
+
 export type JinisRecord = {
   id: string
   slNo: number

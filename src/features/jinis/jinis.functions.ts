@@ -15,6 +15,7 @@ import {
   deleteJinisRecord,
   getJinisRecord,
   listJinisLinkOptions,
+  listJinisCalculatorLookup,
   listJinisRecords,
   settleJinisRecord,
   sumActiveJinisCredit,
@@ -30,6 +31,11 @@ export const listJinisOptions = createServerFn({ method: 'GET' })
   .middleware([requireUserMiddleware])
   .validator(linkOptionsQuerySchema)
   .handler(async ({ data }) => listJinisLinkOptions(data.query))
+
+export const listJinisCalculatorOptions = createServerFn({ method: 'GET' })
+  .middleware([requireUserMiddleware])
+  .validator(linkOptionsQuerySchema)
+  .handler(async ({ data }) => listJinisCalculatorLookup(data.query))
 
 export const getActiveJinisTotal = createServerFn({ method: 'GET' })
   .middleware([requireUserMiddleware])

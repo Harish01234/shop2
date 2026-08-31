@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 import {
   COMPOUNDING_MONTH_OPTIONS,
@@ -12,6 +12,13 @@ import {
   type InterestRateOption,
 } from '#/features/calculator/calculator.utils'
 import { FriendlyDatePicker } from '#/features/calculator/component/friendly-date-picker'
+import {
+  JinisSlNoCombobox,
+  mergeJinisSlNoOption,
+} from '#/features/jinis/component/jinis-sl-no-combobox'
+import { useJinisCalculatorLookup } from '#/features/jinis/jinis.hooks'
+import type { JinisCalculatorLookupOption } from '#/features/jinis/jinis.types'
+import { toDateInput } from '#/lib/calendar-date'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -27,7 +34,15 @@ import {
   NativeSelectOption,
 } from '@/components/ui/native-select'
 
+const SETTLED_JINIS_MESSAGE =
+  'This Jinis is already settled — interest is not applicable.'
+
 export function CreditInterestCalculator() {
+  const [jinisQuery, setJinisQuery] = useState('')
+  const [debouncedJinisQuery, setDebouncedJinisQuery] = useState('')
+  const [selectedJinisId, setSelectedJinisId] = useState('')
+  const [selectedJinis, setSelectedJinis] =
+    useState<JinisCalculatorLookupOption | null>(null)
   const [credit, setCredit] = useState('')
   const [interestRate, setInterestRate] = useState<InterestRateOption>(2)
   const [compoundingMonths, setCompoundingMonths] =
@@ -35,11 +50,64 @@ export function CreditInterestCalculator() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState(todayDayValue)
   const [error, setError] = useState<string | null>(null)
+  const [settledMessage, setSettledMessage] = useState<string | null>(null)
   const [result, setResult] = useState<CreditInterestResult | null>(null)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedJinisQuery(jinisQuery)
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [jinisQuery])
+
+  const shouldFetchJinisLookup =
+    debouncedJinisQuery.trim().length > 0 || Boolean(selectedJinisId)
+  const jinisLookupQuery = useJinisCalculatorLookup(
+    shouldFetchJinisLookup,
+    debouncedJinisQuery,
+  )
+  const jinisOptions = mergeJinisSlNoOption(
+    jinisLookupQuery.data ?? [],
+    selectedJinis,
+  )
+
+  function handleInputChange() {
+    setError(null)
+    setSettledMessage(null)
+    setResult(null)
+  }
+
+  function handleJinisSelect(nextId: string) {
+    setSelectedJinisId(nextId)
+    handleInputChange()
+
+    if (!nextId) {
+      setSelectedJinis(null)
+      return
+    }
+
+    const jinis =
+      jinisLookupQuery.data?.find((item) => item.id === nextId) ??
+      (selectedJinis?.id === nextId ? selectedJinis : null)
+
+    if (!jinis) return
+
+    setSelectedJinis(jinis)
+    setCredit(String(jinis.credit))
+    setStartDate(toDateInput(jinis.date))
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    setSettledMessage(null)
+
+    if (selectedJinis && !selectedJinis.active) {
+      setResult(null)
+      setSettledMessage(SETTLED_JINIS_MESSAGE)
+      return
+    }
 
     try {
       setResult(
@@ -59,11 +127,6 @@ export function CreditInterestCalculator() {
     }
   }
 
-  function handleInputChange() {
-    setError(null)
-    setResult(null)
-  }
-
   return (
     <Card
       size="sm"
@@ -77,6 +140,27 @@ export function CreditInterestCalculator() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <Field>
+            <FieldLabel htmlFor="jinisSlNo">Jinis SL No</FieldLabel>
+            <JinisSlNoCombobox
+              id="jinisSlNo"
+              value={selectedJinisId}
+              onValueChange={handleJinisSelect}
+              options={jinisOptions}
+              placeholder={
+                jinisLookupQuery.isLoading ? 'Loading…' : 'Search SL no or name'
+              }
+              searchPlaceholder="Search SL no or name"
+              emptyText={
+                debouncedJinisQuery.trim()
+                  ? 'No Jinis found.'
+                  : 'Type SL no or name to search all Jinis.'
+              }
+              disabled={jinisLookupQuery.isLoading}
+              onQueryChange={setJinisQuery}
+            />
+          </Field>
+
           <FieldGroup className="grid gap-3 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="credit">Credit</FieldLabel>
@@ -174,6 +258,12 @@ export function CreditInterestCalculator() {
             Calculate
           </Button>
         </form>
+
+        {settledMessage ? (
+          <div className="mt-3 rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground">
+            {settledMessage}
+          </div>
+        ) : null}
 
         {result ? (
           <div className="mt-3 space-y-2.5 border-t border-border pt-3">

@@ -5,6 +5,7 @@ import {
   getActiveJinisTotal,
   getJinis,
   listJinis,
+  listJinisCalculatorOptions,
   listJinisOptions,
 } from './jinis.functions'
 import {
@@ -12,6 +13,7 @@ import {
   type JinisFilterValues,
 } from './jinis.filters'
 import type {
+  JinisCalculatorLookupOption,
   JinisLinkOption,
   JinisListResult,
   JinisRecord,
@@ -24,6 +26,8 @@ export const jinisKeys = {
   lists: () => [...jinisKeys.all, 'list'] as const,
   list: (input: ListJinisInput) => [...jinisKeys.lists(), input] as const,
   linkOptions: (query = '') => [...jinisKeys.all, 'linkOptions', query] as const,
+  calculatorLookup: (query = '') =>
+    [...jinisKeys.all, 'calculatorLookup', query] as const,
   record: (id: string) => [...jinisKeys.all, 'record', id] as const,
   activeTotal: () => [...jinisKeys.all, 'activeTotal'] as const,
 }
@@ -50,6 +54,19 @@ export function jinisLinkOptionsQueryOptions(query = '') {
       listJinisOptions({ data: { query: query || undefined } }) as Promise<
         JinisLinkOption[]
       >,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function jinisCalculatorLookupQueryOptions(query = '') {
+  return queryOptions({
+    queryKey: jinisKeys.calculatorLookup(query),
+    queryFn: () =>
+      listJinisCalculatorOptions({
+        data: { query: query || undefined },
+      }) as Promise<JinisCalculatorLookupOption[]>,
     staleTime: 0,
     refetchOnMount: true,
     refetchOnWindowFocus: false,

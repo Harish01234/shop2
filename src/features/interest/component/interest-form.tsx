@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { z } from 'zod'
-import { AlertCircleIcon, SearchIcon } from 'lucide-react'
+import { AlertCircleIcon } from 'lucide-react'
 
 import {
   useCreateInterest,
@@ -12,6 +12,10 @@ import { createInterestSchema } from '#/features/interest/interest.schema'
 import type { InterestRecord } from '#/features/interest/interest.types'
 import { getErrorMessage } from '#/features/interest/interest.utils'
 import { formatMoney } from '#/features/dailycalculation/dailycalculation.utils'
+import {
+  JinisSlNoCombobox,
+  mergeJinisSlNoOption,
+} from '#/features/jinis/component/jinis-sl-no-combobox'
 import { useJinisLinkOptions } from '#/features/jinis/jinis.hooks'
 import { useJinisCharaLinkOptions } from '#/features/jinischara/jinischara.hooks'
 import { toDateInput } from '#/lib/calendar-date'
@@ -24,16 +28,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-  ComboboxValue,
-} from '@/components/ui/combobox'
-import {
   Field,
   FieldError,
   FieldGroup,
@@ -41,7 +35,6 @@ import {
   RequiredMark,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { InputGroupAddon } from '@/components/ui/input-group'
 import {
   NativeSelect,
   NativeSelectOption,
@@ -60,86 +53,7 @@ function mergeLinkOption(
   options: LinkOption[],
   selected?: LinkOption | null,
 ) {
-  if (!selected) return options
-  if (options.some((item) => item.id === selected.id)) return options
-  return [selected, ...options]
-}
-
-function formatLinkOption(item: LinkOption) {
-  return `#${item.slNo} · ${item.name}`
-}
-
-function InterestLinkCombobox({
-  id,
-  value,
-  onValueChange,
-  options,
-  placeholder,
-  searchPlaceholder,
-  emptyText,
-  disabled,
-  onQueryChange,
-}: {
-  id: string
-  value: string
-  onValueChange: (id: string) => void
-  options: LinkOption[]
-  placeholder: string
-  searchPlaceholder: string
-  emptyText: string
-  disabled?: boolean
-  onQueryChange?: (query: string) => void
-}) {
-  const selected = options.find((item) => item.id === value) ?? null
-
-  return (
-    <Combobox
-      name={id}
-      items={options}
-      value={selected}
-      onValueChange={(item) => onValueChange(item?.id ?? '')}
-      itemToStringLabel={formatLinkOption}
-      itemToStringValue={(item) => item.id}
-      isItemEqualToValue={(a, b) => a.id === b.id}
-      autoHighlight
-      disabled={disabled}
-    >
-      <ComboboxTrigger
-        id={id}
-        render={
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full justify-between font-normal data-placeholder:text-muted-foreground"
-          />
-        }
-      >
-        <span className="min-w-0 truncate">
-          <ComboboxValue placeholder={placeholder} />
-        </span>
-      </ComboboxTrigger>
-      <ComboboxContent className="min-w-(--anchor-width)">
-        <ComboboxInput
-          showTrigger={false}
-          placeholder={searchPlaceholder}
-          aria-label={searchPlaceholder}
-          onChange={(event) => onQueryChange?.(event.currentTarget.value)}
-        >
-          <InputGroupAddon align="inline-start">
-            <SearchIcon />
-          </InputGroupAddon>
-        </ComboboxInput>
-        <ComboboxEmpty>{emptyText}</ComboboxEmpty>
-        <ComboboxList>
-          {(item: LinkOption) => (
-            <ComboboxItem key={item.id} value={item}>
-              {formatLinkOption(item)}
-            </ComboboxItem>
-          )}
-        </ComboboxList>
-      </ComboboxContent>
-    </Combobox>
-  )
+  return mergeJinisSlNoOption(options, selected)
 }
 
 type LinkType = 'jinis' | 'jinischara' | 'person'
@@ -368,7 +282,7 @@ export function InterestForm({
                   control={form.control}
                   name="jinisId"
                   render={({ field }) => (
-                    <InterestLinkCombobox
+                    <JinisSlNoCombobox
                       id="jinisId"
                       value={typeof field.value === 'string' ? field.value : ''}
                       onValueChange={field.onChange}
@@ -401,7 +315,7 @@ export function InterestForm({
                   control={form.control}
                   name="jinisCharaId"
                   render={({ field }) => (
-                    <InterestLinkCombobox
+                    <JinisSlNoCombobox
                       id="jinisCharaId"
                       value={typeof field.value === 'string' ? field.value : ''}
                       onValueChange={field.onChange}

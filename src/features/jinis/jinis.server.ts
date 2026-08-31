@@ -157,6 +157,25 @@ export async function listJinisLinkOptions(query?: string) {
   })
 }
 
+export async function listJinisCalculatorLookup(query?: string) {
+  const where = await buildLinkOptionsSearchWhere('Jinis', query)
+  if (!where) return []
+
+  return prisma.jinis.findMany({
+    where,
+    select: {
+      id: true,
+      slNo: true,
+      name: true,
+      credit: true,
+      date: true,
+      active: true,
+    },
+    orderBy: { slNo: 'desc' },
+    take: LINK_OPTIONS_LIMIT,
+  })
+}
+
 export async function getJinisRecord(data: JinisIdInput) {
   return prisma.jinis.findUnique({
     where: { id: data.id },
