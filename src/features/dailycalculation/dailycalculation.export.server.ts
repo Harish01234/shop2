@@ -1,11 +1,15 @@
-import { PassThrough } from 'node:stream'
-
 import ExcelJS from 'exceljs'
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from 'pdf-lib'
 
 import { prisma } from '#/db'
 import type { DownloadableFile } from '#/lib/download-file'
 import { formatCalendarDate, toDateInput } from '#/lib/calendar-date'
-import { getPDFDocument } from '#/lib/pdfkit.server'
 import type { MainCalculationRecord } from '#/features/maincalculation/maincalculation.types'
 
 import { getDailyCalculationDetailRecord } from './dailycalculation.server'
@@ -432,23 +436,82 @@ const PDF_COLORS = {
   asolHeader: '#FFD166' as PdfRgb,
   grid: '#BBBBBB' as PdfRgb,
   white: '#FFFFFF' as PdfRgb,
+  text: '#111111' as PdfRgb,
 }
 
-function fillRect(
-  doc: PDFKit.PDFDocument,
+type PdfFonts = {
+  regular: PDFFont
+  bold: PDFFont
+}
+
+function hexToColor(hex: PdfRgb) {
+  const r = Number.parseInt(hex.slice(1, 3), 16) / 255
+  const g = Number.parseInt(hex.slice(3, 5), 16) / 255
+  const b = Number.parseInt(hex.slice(5, 7), 16) / 255
+  return rgb(r, g, b)
+}
+
+function topToPdfY(pageHeight: number, yFromTop: number) {
+  return pageHeight - yFromTop
+}
+
+function drawFilledRect(
+  page: PDFPage,
+  pageHeight: number,
   x: number,
-  y: number,
+  yFromTop: number,
   width: number,
   height: number,
-  hex: PdfRgb,
+  fill: PdfRgb,
+  stroke = true,
 ) {
-  doc.fillColor(hex).rect(x, y, width, height).fill()
+  page.drawRectangle({
+    x,
+    y: topToPdfY(pageHeight, yFromTop + height),
+    width,
+    height,
+    color: hexToColor(fill),
+    borderColor: stroke ? hexToColor(PDF_COLORS.grid) : undefined,
+    borderWidth: stroke ? 0.75 : 0,
+  })
+}
+
+function textWidth(font: PDFFont, text: string, size: number) {
+  return font.widthOfTextAtSize(text, size)
+}
+
+function drawTextAt(
+  page: PDFPage,
+  pageHeight: number,
+  text: string,
+  x: number,
+  yFromTop: number,
+  width: number,
+  size: number,
+  font: PDFFont,
+  align: 'left' | 'right' | 'center',
+  color: PdfRgb = PDF_COLORS.text,
+) {
+  const tw = textWidth(font, text, size)
+  let drawX = x
+  if (align === 'center') drawX = x + (width - tw) / 2
+  if (align === 'right') drawX = x + width - tw
+
+  page.drawText(text, {
+    x: drawX,
+    y: topToPdfY(pageHeight, yFromTop + size),
+    size,
+    font,
+    color: hexToColor(color),
+  })
 }
 
 function renderPdfBlock(
-  doc: PDFKit.PDFDocument,
+  page: PDFPage,
+  pageHeight: number,
+  fonts: PdfFonts,
   x: number,
-  y: number,
+  yFromTop: number,
   width: number,
   title: string,
   bg: PdfRgb,
@@ -458,44 +521,60 @@ function renderPdfBlock(
   const rowHeight = 17
   const height = titleHeight + lines.length * rowHeight + 10
 
-  fillRect(doc, x, y, width, height, bg)
+  drawFilledRect(page, pageHeight, x, yFromTop, width, height, bg)
+  drawTextAt(
+    page,
+    pageHeight,
+    title,
+    x + 8,
+    yFromTop + 5,
+    width - 16,
+    10,
+    fonts.bold,
+    'center',
+  )
 
-  doc.fillColor('#111111').font('Helvetica-Bold').fontSize(10)
-  doc.text(title, x + 8, y + 5, { width: width - 16, align: 'center' })
-
-  let cy = y + titleHeight
+  let rowTop = yFromTop + titleHeight
   for (const line of lines) {
-    doc
-      .font(line.bold ? 'Helvetica-Bold' : 'Helvetica')
-      .fontSize(9)
-      .fillColor('#111111')
+    const font = line.bold ? fonts.bold : fonts.regular
     const valueText =
       typeof line.value === 'number'
         ? formatExportMoney(line.value)
         : String(line.value)
-    doc.text(line.label, x + 10, cy, {
-      width: width * 0.58,
-      align: 'left',
-      lineBreak: false,
-    })
-    doc.text(valueText, x + 10, cy, {
-      width: width - 20,
-      align: 'right',
-      lineBreak: false,
-    })
-    cy += rowHeight
+    drawTextAt(
+      page,
+      pageHeight,
+      line.label,
+      x + 10,
+      rowTop,
+      width * 0.58,
+      9,
+      font,
+      'left',
+    )
+    drawTextAt(
+      page,
+      pageHeight,
+      valueText,
+      x + 10,
+      rowTop,
+      width - 20,
+      9,
+      font,
+      'right',
+    )
+    rowTop += rowHeight
   }
-
-  doc.strokeColor(PDF_COLORS.grid).lineWidth(0.75)
-  doc.rect(x, y, width, height).stroke()
 
   return height
 }
 
 function renderPdfTable(
-  doc: PDFKit.PDFDocument,
+  page: PDFPage,
+  pageHeight: number,
+  fonts: PdfFonts,
   x: number,
-  y: number,
+  yFromTop: number,
   width: number,
   title: string,
   headerBg: PdfRgb,
@@ -509,246 +588,301 @@ function renderPdfTable(
   const headerHeight = 20
   const titleHeight = 16
 
-  doc.font('Helvetica-Bold').fontSize(11).fillColor('#111111')
-  doc.text(title, x, y, { width, align: 'center' })
+  drawTextAt(
+    page,
+    pageHeight,
+    title,
+    x,
+    yFromTop,
+    width,
+    11,
+    fonts.bold,
+    'center',
+  )
 
-  let cy = y + titleHeight
-  fillRect(doc, x, cy, width, headerHeight, headerBg)
+  const headerTop = yFromTop + titleHeight
+  drawFilledRect(page, pageHeight, x, headerTop, width, headerHeight, headerBg)
 
-  doc.fillColor('#111111').font('Helvetica-Bold').fontSize(9)
-  let hx = x
+  let columnX = x
   headers.forEach((header, index) => {
-    doc.text(header, hx + 4, cy + 5, {
-      width: colWidths[index]! - 8,
-      align: alignments[index],
-      lineBreak: false,
-    })
-    hx += colWidths[index]!
+    drawTextAt(
+      page,
+      pageHeight,
+      header,
+      columnX + 4,
+      headerTop + 5,
+      colWidths[index]! - 8,
+      9,
+      fonts.bold,
+      alignments[index]!,
+    )
+    columnX += colWidths[index]!
   })
 
-  cy += headerHeight
-  doc.strokeColor(PDF_COLORS.grid).lineWidth(0.75)
-  doc.rect(x, cy - headerHeight, width, headerHeight).stroke()
-
+  let rowTop = headerTop + headerHeight
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex]!
     const isTotalRow = boldLastRow && rowIndex === rows.length - 1
-    hx = x
+    const font = isTotalRow ? fonts.bold : fonts.regular
 
-    doc
-      .font(isTotalRow ? 'Helvetica-Bold' : 'Helvetica')
-      .fontSize(9)
-      .fillColor('#111111')
-
+    columnX = x
     for (let index = 0; index < row.length; index += 1) {
       const cell = row[index]!
       const text =
         typeof cell === 'number' ? formatExportMoney(cell) : String(cell)
-      doc.text(text, hx + 4, cy + 4, {
-        width: colWidths[index]! - 8,
-        align: alignments[index],
-        lineBreak: false,
-      })
+      drawTextAt(
+        page,
+        pageHeight,
+        text,
+        columnX + 4,
+        rowTop + 4,
+        colWidths[index]! - 8,
+        9,
+        font,
+        alignments[index]!,
+      )
 
       if (index > 0) {
-        doc
-          .moveTo(hx, cy)
-          .lineTo(hx, cy + rowHeight)
-          .strokeColor(PDF_COLORS.grid)
-          .lineWidth(0.5)
-          .stroke()
+        page.drawLine({
+          start: { x: columnX, y: topToPdfY(pageHeight, rowTop + rowHeight) },
+          end: { x: columnX, y: topToPdfY(pageHeight, rowTop) },
+          thickness: 0.5,
+          color: hexToColor(PDF_COLORS.grid),
+        })
       }
 
-      hx += colWidths[index]!
+      columnX += colWidths[index]!
     }
 
-    doc.rect(x, cy, width, rowHeight).stroke()
-    cy += rowHeight
+    page.drawRectangle({
+      x,
+      y: topToPdfY(pageHeight, rowTop + rowHeight),
+      width,
+      height: rowHeight,
+      borderColor: hexToColor(PDF_COLORS.grid),
+      borderWidth: 0.75,
+    })
+    rowTop += rowHeight
   }
 
-  doc.rect(x, y + titleHeight, width, cy - y - titleHeight).stroke()
+  page.drawRectangle({
+    x,
+    y: topToPdfY(pageHeight, rowTop),
+    width,
+    height: rowTop - headerTop,
+    borderColor: hexToColor(PDF_COLORS.grid),
+    borderWidth: 0.75,
+  })
 
-  return cy - y
+  return rowTop - yFromTop
 }
 
-function renderPdf(payload: ExportPayload, scope: DailyCalculationExportScope) {
-  const PDFDocument = getPDFDocument()
+async function renderPdf(
+  payload: ExportPayload,
+  scope: DailyCalculationExportScope,
+): Promise<Buffer> {
   const landscape = scope === 'full'
-  return new Promise<Buffer>((resolve, reject) => {
-    const doc = new PDFDocument({
-      margin: 36,
-      size: 'A4',
-      layout: landscape ? 'landscape' : 'portrait',
-    })
-    const stream = new PassThrough()
-    const chunks: Buffer[] = []
+  const pageWidth = landscape ? 841.89 : 595.28
+  const pageHeight = landscape ? 595.28 : 841.89
+  const margin = 36
 
-    stream.on('data', (chunk: Buffer) => chunks.push(chunk))
-    stream.on('end', () => resolve(Buffer.concat(chunks)))
-    stream.on('error', reject)
+  const pdfDoc = await PDFDocument.create()
+  const fonts: PdfFonts = {
+    regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
+    bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
+  }
+  const page = pdfDoc.addPage([pageWidth, pageHeight])
 
-    doc.pipe(stream)
+  const contentWidth = pageWidth - margin * 2
+  const gap = 12
+  const blockWidth = (contentWidth - gap) / 2
+  const leftX = margin
+  const rightX = leftX + blockWidth + gap
+  let y = margin
 
-    const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right
-    const gap = 12
-    const blockWidth = (pageWidth - gap) / 2
-    const leftX = doc.page.margins.left
-    const rightX = leftX + blockWidth + gap
-    let y = doc.page.margins.top
+  const dailyLeftH = renderPdfBlock(
+    page,
+    pageHeight,
+    fonts,
+    leftX,
+    y,
+    blockWidth,
+    'Daily Calculation — Left',
+    PDF_COLORS.dailyLeft,
+    buildDailyLeftLines(payload.detail),
+  )
+  const dailyRightH = renderPdfBlock(
+    page,
+    pageHeight,
+    fonts,
+    rightX,
+    y,
+    blockWidth,
+    'Daily Calculation — Right',
+    PDF_COLORS.dailyRight,
+    buildDailyRightLines(payload.detail),
+  )
 
-    const dailyLeftH = renderPdfBlock(
-      doc,
+  y += Math.max(dailyLeftH, dailyRightH) + 14
+
+  const mainLeftLines = buildMainLeftLines(payload.mainCalculation)
+  const mainRightLines = buildMainRightLines(payload.mainCalculation)
+
+  if (payload.mainCalculation) {
+    const mainLeftH = renderPdfBlock(
+      page,
+      pageHeight,
+      fonts,
       leftX,
       y,
       blockWidth,
-      'Daily Calculation — Left',
-      PDF_COLORS.dailyLeft,
-      buildDailyLeftLines(payload.detail),
+      'Main Calculation — Left',
+      PDF_COLORS.mainLeft,
+      mainLeftLines,
     )
-    const dailyRightH = renderPdfBlock(
-      doc,
+    const mainRightH = renderPdfBlock(
+      page,
+      pageHeight,
+      fonts,
       rightX,
       y,
       blockWidth,
-      'Daily Calculation — Right',
-      PDF_COLORS.dailyRight,
-      buildDailyRightLines(payload.detail),
+      'Main Calculation — Right',
+      PDF_COLORS.mainRight,
+      mainRightLines,
     )
+    y += Math.max(mainLeftH, mainRightH) + 12
+  } else {
+    const blockHeight = 52
+    drawFilledRect(page, pageHeight, leftX, y, contentWidth, blockHeight, PDF_COLORS.mainLeft)
+    drawTextAt(
+      page,
+      pageHeight,
+      'No Main Calculation yet',
+      leftX,
+      y + blockHeight / 2 - 5,
+      contentWidth,
+      10,
+      fonts.regular,
+      'center',
+    )
+    y += blockHeight + 12
+  }
 
-    y += Math.max(dailyLeftH, dailyRightH) + 14
+  drawTextAt(
+    page,
+    pageHeight,
+    `Daily Calculation — Difference: ${formatExportMoney(payload.detail.difference)} · ${balanceLabel(payload.detail.balanceStatus)}`,
+    leftX,
+    y,
+    blockWidth,
+    9,
+    fonts.regular,
+    'left',
+  )
+  if (payload.mainCalculation) {
+    drawTextAt(
+      page,
+      pageHeight,
+      `Main Calculation — Difference: ${formatExportMoney(payload.mainCalculation.difference)} · ${balanceLabel(payload.mainCalculation.balanceStatus)}`,
+      rightX,
+      y,
+      blockWidth,
+      9,
+      fonts.regular,
+      'left',
+    )
+  }
 
-    const mainLeftLines = buildMainLeftLines(payload.mainCalculation)
-    const mainRightLines = buildMainRightLines(payload.mainCalculation)
+  y += 22
 
-    if (payload.mainCalculation) {
-      const mainLeftH = renderPdfBlock(
-        doc,
-        leftX,
-        y,
-        blockWidth,
-        'Main Calculation — Left',
-        PDF_COLORS.mainLeft,
-        mainLeftLines,
-      )
+  drawFilledRect(page, pageHeight, leftX, y, contentWidth, 28, PDF_COLORS.banner, false)
+  drawTextAt(
+    page,
+    pageHeight,
+    exportBannerTitle(payload.periodLabel),
+    leftX,
+    y + 8,
+    contentWidth,
+    13,
+    fonts.bold,
+    'center',
+    PDF_COLORS.white,
+  )
 
-      const mainRightH = renderPdfBlock(
-        doc,
-        rightX,
-        y,
-        blockWidth,
-        'Main Calculation — Right',
-        PDF_COLORS.mainRight,
-        mainRightLines,
-      )
+  y += 38
 
-      y += Math.max(mainLeftH, mainRightH) + 12
-    } else {
-      const blockHeight = 52
-      fillRect(doc, leftX, y, pageWidth, blockHeight, PDF_COLORS.mainLeft)
-      doc.fillColor('#111111').font('Helvetica-Oblique').fontSize(10)
-      doc.text('No Main Calculation yet', leftX, y + blockHeight / 2 - 6, {
-        width: pageWidth,
-        align: 'center',
-      })
-      doc.strokeColor(PDF_COLORS.grid).lineWidth(0.75)
-      doc.rect(leftX, y, pageWidth, blockHeight).stroke()
-      y += blockHeight + 12
-    }
+  if (scope === 'full') {
+    const tableGap = 16
+    const tableWidth = (contentWidth - tableGap) / 2
+    const deoyaCols = [
+      tableWidth * 0.28,
+      tableWidth * 0.38,
+      tableWidth * 0.34,
+    ]
+    const asolCols = [
+      tableWidth * 0.2,
+      tableWidth * 0.26,
+      tableWidth * 0.26,
+      tableWidth * 0.28,
+    ]
 
-    doc.font('Helvetica').fontSize(9).fillColor('#111111')
-    doc.text(
-      `Daily Calculation — Difference: ${formatExportMoney(payload.detail.difference)} · ${balanceLabel(payload.detail.balanceStatus)}`,
+    const deoyaRows =
+      payload.detail.deoyaRows.length > 0
+        ? payload.detail.deoyaRows.map((row) => [
+            row.slNo,
+            row.amount,
+            formatCalendarDate(row.date),
+          ])
+        : [['—', '—', 'No records']]
+
+    deoyaRows.push(['Total Deoya', payload.detail.deoya, ''])
+
+    const asolRows =
+      payload.detail.asolSudhRows.length > 0
+        ? payload.detail.asolSudhRows.map((row) => [
+            row.slNo,
+            row.amount,
+            row.sudh,
+            formatCalendarDate(row.date),
+          ])
+        : [['—', '—', '—', 'No records']]
+
+    const deoyaH = renderPdfTable(
+      page,
+      pageHeight,
+      fonts,
       leftX,
       y,
-      { width: blockWidth, align: 'left' },
+      tableWidth,
+      'Deoya',
+      PDF_COLORS.deoyaHeader,
+      ['SL No', 'Amount', 'Date'],
+      deoyaRows,
+      deoyaCols,
+      ['left', 'right', 'left'],
+      true,
     )
-    if (payload.mainCalculation) {
-      doc.text(
-        `Main Calculation — Difference: ${formatExportMoney(payload.mainCalculation.difference)} · ${balanceLabel(payload.mainCalculation.balanceStatus)}`,
-        rightX,
-        y,
-        { width: blockWidth, align: 'left' },
-      )
-    }
+    const asolH = renderPdfTable(
+      page,
+      pageHeight,
+      fonts,
+      leftX + tableWidth + tableGap,
+      y,
+      tableWidth,
+      'Asol + Sudh',
+      PDF_COLORS.asolHeader,
+      ['SL No', 'Amount', 'Sudh', 'Date'],
+      asolRows,
+      asolCols,
+      ['left', 'right', 'right', 'left'],
+    )
 
-    y += 22
+    y += Math.max(deoyaH, asolH)
+  }
 
-    fillRect(doc, leftX, y, pageWidth, 28, PDF_COLORS.banner)
-    doc.fillColor(PDF_COLORS.white).font('Helvetica-Bold').fontSize(13)
-    doc.text(exportBannerTitle(payload.periodLabel), leftX, y + 8, {
-      width: pageWidth,
-      align: 'center',
-    })
-
-    y += 38
-
-    if (scope === 'full') {
-      const tableGap = 16
-      const tableWidth = (pageWidth - tableGap) / 2
-      const deoyaCols = [
-        tableWidth * 0.28,
-        tableWidth * 0.38,
-        tableWidth * 0.34,
-      ]
-      const asolCols = [
-        tableWidth * 0.2,
-        tableWidth * 0.26,
-        tableWidth * 0.26,
-        tableWidth * 0.28,
-      ]
-
-      const deoyaRows =
-        payload.detail.deoyaRows.length > 0
-          ? payload.detail.deoyaRows.map((row) => [
-              row.slNo,
-              row.amount,
-              formatCalendarDate(row.date),
-            ])
-          : [['—', '—', 'No records']]
-
-      deoyaRows.push(['Total Deoya', payload.detail.deoya, ''])
-
-      const asolRows =
-        payload.detail.asolSudhRows.length > 0
-          ? payload.detail.asolSudhRows.map((row) => [
-              row.slNo,
-              row.amount,
-              row.sudh,
-              formatCalendarDate(row.date),
-            ])
-          : [['—', '—', '—', 'No records']]
-
-      const deoyaH = renderPdfTable(
-        doc,
-        leftX,
-        y,
-        tableWidth,
-        'Deoya',
-        PDF_COLORS.deoyaHeader,
-        ['SL No', 'Amount', 'Date'],
-        deoyaRows,
-        deoyaCols,
-        ['left', 'right', 'left'],
-        true,
-      )
-      const asolH = renderPdfTable(
-        doc,
-        leftX + tableWidth + tableGap,
-        y,
-        tableWidth,
-        'Asol + Sudh',
-        PDF_COLORS.asolHeader,
-        ['SL No', 'Amount', 'Sudh', 'Date'],
-        asolRows,
-        asolCols,
-        ['left', 'right', 'right', 'left'],
-      )
-
-      y += Math.max(deoyaH, asolH)
-    }
-
-    doc.end()
-  })
+  const bytes = await pdfDoc.save()
+  return Buffer.from(bytes)
 }
 
 export async function exportDailyCalculationRecord(
