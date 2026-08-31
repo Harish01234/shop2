@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { AlertCircleIcon } from 'lucide-react'
 
 import { parseDateInput } from '#/lib/calendar-date'
 import { AdminJinisPreviewTable } from '#/features/admin/admin-jinis-preview-table'
 import { parseJinisCsv, type CsvJinisPreviewRow } from '#/features/admin/admin.csv'
+import {
+  useMigrationCsvDateOrder,
+} from '#/features/admin/component/admin-migration-date-format-field'
 import {
   useAdminOverview,
   useDeleteAllJinis,
@@ -40,7 +43,9 @@ function AdminJinisMigrationPage() {
   const overviewQuery = useAdminOverview()
   const importJinisMutation = useImportJinis()
   const deleteAllJinisMutation = useDeleteAllJinis()
+  const { dateOrder } = useMigrationCsvDateOrder()
   const [fileName, setFileName] = useState<string | null>(null)
+  const [csvText, setCsvText] = useState<string | null>(null)
   const [rows, setRows] = useState<CsvJinisPreviewRow[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -50,25 +55,37 @@ function AdminJinisMigrationPage() {
   const errorCount = rows.length - validRows.length
   const jinisCount = overviewQuery.data?.jinisCount ?? 0
 
-  async function handleFile(file: File | undefined) {
-    setParseError(null)
-    setRows([])
-    setFileName(null)
-
-    if (!file) return
-
+  function parseCsvText(text: string) {
     try {
-      const text = await file.text()
-      const parsed = parseJinisCsv(text)
-      setFileName(file.name)
+      const parsed = parseJinisCsv(text, { dateOrder })
+      setParseError(null)
       setRows(parsed)
     } catch (error) {
+      setRows([])
       setParseError(
         error instanceof Error
           ? error.message
           : 'Could not read this CSV file.',
       )
     }
+  }
+
+  useEffect(() => {
+    if (!csvText) return
+    parseCsvText(csvText)
+  }, [csvText, dateOrder])
+
+  async function handleFile(file: File | undefined) {
+    setParseError(null)
+    setRows([])
+    setCsvText(null)
+    setFileName(null)
+
+    if (!file) return
+
+    const text = await file.text()
+    setFileName(file.name)
+    setCsvText(text)
   }
 
   async function confirmImport() {
@@ -86,6 +103,7 @@ function AdminJinisMigrationPage() {
       })
       .then(() => {
         setRows([])
+        setCsvText(null)
         setFileName(null)
       })
       .catch(() => {})

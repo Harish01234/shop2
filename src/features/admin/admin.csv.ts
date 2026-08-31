@@ -9,6 +9,9 @@ import {
   parsePercentage,
   toDateInput,
 } from './admin-csv-core'
+import type { CsvParseOptions } from './admin-migration-date-format'
+
+export type { CsvParseOptions } from './admin-migration-date-format'
 
 export type CsvJinisPreviewRow = {
   rowNumber: number
@@ -36,7 +39,7 @@ export type CsvJinisCharaPreviewRow = {
 
 const unknownDate = '1970-01-01'
 
-export function parseJinisCsv(text: string): CsvJinisPreviewRow[] {
+export function parseJinisCsv(text: string, options: CsvParseOptions = {}) {
   const table = parseCsvTable(text)
   const headerRowIndex = table.findIndex((row) => {
     const headers = row.map(normalizeHeader)
@@ -84,7 +87,7 @@ export function parseJinisCsv(text: string): CsvJinisPreviewRow[] {
     }
 
     const slNo = Number(slNoRaw.replace(/[^\d]/g, ''))
-    const date = parseDate(dateRaw)
+    const date = parseDate(dateRaw, options)
     const credit = parseCredit(creditRaw)
     const errors: string[] = []
 
@@ -106,7 +109,7 @@ export function parseJinisCsv(text: string): CsvJinisPreviewRow[] {
   })
 }
 
-export function parseJinisCharaCsv(text: string): CsvJinisCharaPreviewRow[] {
+export function parseJinisCharaCsv(text: string, options: CsvParseOptions = {}) {
   const table = parseCsvTable(text)
   const headerRowIndex = table.findIndex((row) => {
     const headers = row.map(normalizeHeader)
@@ -161,7 +164,7 @@ export function parseJinisCharaCsv(text: string): CsvJinisCharaPreviewRow[] {
 
     const slNo = Number(slNoRaw.replace(/[^\d]/g, ''))
     const credit = parseCredit(creditRaw)
-    const issueDate = parseDate(dateRaw)
+    const issueDate = parseDate(dateRaw, options)
     const percentage = parsePercentage(percentageRaw)
     const errors: string[] = []
 

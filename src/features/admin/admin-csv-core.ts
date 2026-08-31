@@ -1,4 +1,7 @@
 import { parseDateInput } from '#/lib/calendar-date'
+import { DEFAULT_JINISCHARA_PERCENTAGE } from '#/features/jinischara/jinischara.utils'
+
+import type { CsvDateOrder } from './admin-migration-date-format'
 
 export function normalizeHeader(value: string) {
   return value
@@ -90,8 +93,6 @@ export function parseCredit(value: string) {
   return Math.round(amount)
 }
 
-import { DEFAULT_JINISCHARA_PERCENTAGE } from '#/features/jinischara/jinischara.utils'
-
 export function parsePercentage(value: string) {
   const trimmed = value.trim()
   if (!trimmed) {
@@ -109,9 +110,48 @@ export function parsePercentage(value: string) {
   return { value: amount, invalid: false }
 }
 
-export function parseDate(value: string) {
+export type ParseDateOptions = {
+  dateOrder?: CsvDateOrder
+}
+
+function parseYmdParts(year: number, month: number, day: number) {
+  const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  try {
+    return parseDateInput(ymd)
+  } catch {
+    return null
+  }
+}
+
+function parseSlashParts(
+  first: number,
+  second: number,
+  year: number,
+  dateOrder: CsvDateOrder,
+) {
+  let day: number
+  let month: number
+
+  if (dateOrder === 'dmy') {
+    day = first
+    month = second
+  } else if (dateOrder === 'mdy') {
+    month = first
+    day = second
+  } else {
+    const dayFirst = first > 12 || second <= 12
+    day = dayFirst ? first : second
+    month = dayFirst ? second : first
+  }
+
+  return parseYmdParts(year, month, day)
+}
+
+export function parseDate(value: string, options: ParseDateOptions = {}) {
   const trimmed = value.trim()
   if (!trimmed) return null
+
+  const dateOrder = options.dateOrder ?? 'auto'
 
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
     try {
@@ -121,20 +161,27 @@ export function parseDate(value: string) {
     }
   }
 
+  const ymdSlash = trimmed.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/)
+  if (ymdSlash) {
+    if (dateOrder === 'ymd' || dateOrder === 'auto') {
+      const parsed = parseYmdParts(
+        Number(ymdSlash[1]),
+        Number(ymdSlash[2]),
+        Number(ymdSlash[3]),
+      )
+      if (parsed) return parsed
+    }
+    if (dateOrder === 'ymd') return null
+  }
+
   const slash = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/)
   if (slash) {
+    if (dateOrder === 'ymd') return null
+
     const first = Number(slash[1])
     const second = Number(slash[2])
     const year = Number(slash[3].length === 2 ? `20${slash[3]}` : slash[3])
-    const dayFirst = first > 12 || second <= 12
-    const day = dayFirst ? first : second
-    const month = dayFirst ? second : first
-    const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    try {
-      return parseDateInput(ymd)
-    } catch {
-      return null
-    }
+    return parseSlashParts(first, second, year, dateOrder)
   }
 
   const serial = Number(trimmed)

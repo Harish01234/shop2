@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { AlertCircleIcon } from 'lucide-react'
 
@@ -9,6 +9,9 @@ import {
   parseJinisCharaCsv,
   type CsvJinisCharaPreviewRow,
 } from '#/features/admin/admin.csv'
+import {
+  useMigrationCsvDateOrder,
+} from '#/features/admin/component/admin-migration-date-format-field'
 import {
   useAdminOverview,
   useDeleteAllJinisChara,
@@ -44,7 +47,9 @@ function AdminJinisCharaMigrationPage() {
   const overviewQuery = useAdminOverview()
   const importMutation = useImportJinisChara()
   const deleteAllMutation = useDeleteAllJinisChara()
+  const { dateOrder } = useMigrationCsvDateOrder()
   const [fileName, setFileName] = useState<string | null>(null)
+  const [csvText, setCsvText] = useState<string | null>(null)
   const [rows, setRows] = useState<CsvJinisCharaPreviewRow[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -54,25 +59,37 @@ function AdminJinisCharaMigrationPage() {
   const errorCount = rows.length - validRows.length
   const jinisCharaCount = overviewQuery.data?.jinisCharaCount ?? 0
 
-  async function handleFile(file: File | undefined) {
-    setParseError(null)
-    setRows([])
-    setFileName(null)
-
-    if (!file) return
-
+  function parseCsvText(text: string) {
     try {
-      const text = await file.text()
-      const parsed = parseJinisCharaCsv(text)
-      setFileName(file.name)
+      const parsed = parseJinisCharaCsv(text, { dateOrder })
+      setParseError(null)
       setRows(parsed)
     } catch (error) {
+      setRows([])
       setParseError(
         error instanceof Error
           ? error.message
           : 'Could not read this CSV file.',
       )
     }
+  }
+
+  useEffect(() => {
+    if (!csvText) return
+    parseCsvText(csvText)
+  }, [csvText, dateOrder])
+
+  async function handleFile(file: File | undefined) {
+    setParseError(null)
+    setRows([])
+    setCsvText(null)
+    setFileName(null)
+
+    if (!file) return
+
+    const text = await file.text()
+    setFileName(file.name)
+    setCsvText(text)
   }
 
   async function confirmImport() {
@@ -92,6 +109,7 @@ function AdminJinisCharaMigrationPage() {
       })
       if (result.imported > 0) {
         setRows([])
+        setCsvText(null)
         setFileName(null)
       }
     } catch {
