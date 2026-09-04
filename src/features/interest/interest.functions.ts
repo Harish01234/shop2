@@ -4,12 +4,14 @@ import { createServerFn } from '@tanstack/react-start'
 import { requireUserMiddleware } from '#/lib/auth-middleware'
 import {
   createInterestSchema,
+  deleteAllInterestSchema,
   interestIdSchema,
   listInterestSchema,
   updateInterestSchema,
 } from './interest.schema'
 import {
   createInterestRecord,
+  deleteAllInterestRecords,
   deleteInterestRecord,
   getInterestRecord,
   listInterestRecords,
@@ -71,3 +73,8 @@ export const deleteInterest = createServerFn({ method: 'POST' })
 
     return result
   })
+
+export const deleteAllInterest = createServerFn({ method: 'POST' })
+  .middleware([requireUserMiddleware])
+  .validator(deleteAllInterestSchema)
+  .handler(async ({ data }) => deleteAllInterestRecords(data))

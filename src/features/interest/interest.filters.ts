@@ -2,6 +2,7 @@ import type {
   InterestSearch,
   InterestSource,
   ListInterestInput,
+  DeleteAllInterestInput,
 } from './interest.types'
 import { DEFAULT_PAGE_SIZE, parsePage } from '#/lib/pagination'
 
@@ -80,6 +81,17 @@ export function toListInterestInput(
     ...compact,
     page,
     pageSize: DEFAULT_PAGE_SIZE,
+  }
+}
+
+export function toDeleteAllInterestInput(
+  source: InterestSource,
+  filters: InterestFilterValues,
+): DeleteAllInterestInput {
+  const compact = compactFilters(filters)
+  return {
+    ...(source === 'all' ? {} : { source }),
+    ...compact,
   }
 }
 

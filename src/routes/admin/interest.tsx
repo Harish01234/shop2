@@ -9,9 +9,11 @@ import { InterestTable } from '#/features/interest/component/interest-table'
 import {
   filtersFromSearch,
   parseInterestSearch,
+  toDeleteAllInterestInput,
   type InterestFilterValues,
 } from '#/features/interest/interest.filters'
 import {
+  useDeleteAllInterest,
   useDeleteInterest,
   useInterestList,
 } from '#/features/interest/interest.hooks'
@@ -113,12 +115,15 @@ function AdminInterestPage() {
   const navigate = useNavigate({ from: '/admin/interest' })
   const interestQuery = useInterestList(currentSource, filters, page)
   const deleteMutation = useDeleteInterest()
+  const deleteAllMutation = useDeleteAllInterest()
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<InterestRecord | undefined>()
   const [deleteTarget, setDeleteTarget] = useState<InterestRecord | null>(null)
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false)
 
   const records = interestQuery.data?.records ?? []
+  const totalMatching = interestQuery.data?.total ?? 0
 
   const handleFiltersChange = useCallback(
     (nextFilters: InterestFilterValues) => {
@@ -144,6 +149,17 @@ function AdminInterestPage() {
     setModalOpen(true)
   }
 
+  async function confirmDeleteAll() {
+    try {
+      await deleteAllMutation.mutateAsync(
+        toDeleteAllInterestInput(currentSource, filters),
+      )
+      setDeleteAllOpen(false)
+    } catch {
+      // Error toast is handled by the mutation.
+    }
+  }
+
   async function confirmDelete() {
     if (!deleteTarget) return
 
@@ -166,9 +182,20 @@ function AdminInterestPage() {
             Payments against Jinis, JinisChara, or a person.
           </p>
         </div>
-        <Button type="button" onClick={openCreateModal}>
-          Create Interest
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={openCreateModal}>
+            Create Interest
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={totalMatching === 0 || deleteAllMutation.isPending}
+            onClick={() => setDeleteAllOpen(true)}
+          >
+            {deleteAllMutation.isPending ? <Spinner /> : null}
+            Delete All
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1">
@@ -258,6 +285,49 @@ function AdminInterestPage() {
           setEditingRecord(undefined)
         }}
       />
+
+      <AlertDialog
+        open={deleteAllOpen}
+        onOpenChange={(open) => {
+          if (!open && !deleteAllMutation.isPending) {
+            setDeleteAllOpen(false)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete all matching Interest records?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {totalMatching === 1
+                ? '1 interest record'
+                : `All ${totalMatching} interest records`}{' '}
+              matching the current tab and filters will be removed permanently.
+              Linked Jinis and JinisChara records will not be changed. This
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className={cn(
+                buttonVariants({ variant: 'outline' }),
+                'bg-background',
+              )}
+              disabled={deleteAllMutation.isPending}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteAllMutation.isPending || totalMatching === 0}
+              onClick={() => void confirmDeleteAll()}
+            >
+              {deleteAllMutation.isPending ? <Spinner /> : null}
+              Delete {totalMatching === 1 ? '1 record' : `all ${totalMatching}`}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={deleteTarget !== null}

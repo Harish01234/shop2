@@ -4,6 +4,7 @@ import type { PaginatedList } from '#/lib/pagination'
 
 import {
   createInterestSchema,
+  deleteAllInterestSchema,
   interestIdSchema,
   interestSearchSchema,
   interestSourceSchema,
@@ -15,6 +16,7 @@ export type CreateInterestInput = z.infer<typeof createInterestSchema>
 export type UpdateInterestInput = z.infer<typeof updateInterestSchema>
 export type InterestIdInput = z.infer<typeof interestIdSchema>
 export type ListInterestInput = z.infer<typeof listInterestSchema>
+export type DeleteAllInterestInput = z.infer<typeof deleteAllInterestSchema>
 export type InterestSearch = z.infer<typeof interestSearchSchema>
 export type InterestSource = z.infer<typeof interestSourceSchema>
 

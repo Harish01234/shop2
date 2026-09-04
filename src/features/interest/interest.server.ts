@@ -6,6 +6,7 @@ import { paginationArgs } from '#/lib/pagination'
 
 import type {
   CreateInterestInput,
+  DeleteAllInterestInput,
   InterestIdInput,
   ListInterestInput,
   UpdateInterestInput,
@@ -104,6 +105,46 @@ async function assertInterestTargets(data: {
 }
 
 export async function listInterestRecords(data: ListInterestInput) {
+  const where = buildInterestWhereInput(data)
+  const { page, pageSize, skip, take } = paginationArgs(data.page, data.pageSize)
+
+  const [records, total] = await Promise.all([
+    prisma.interest.findMany({
+      where,
+      select: {
+        id: true,
+        amount: true,
+        date: true,
+        remarks: true,
+        jinisId: true,
+        jinisCharaId: true,
+        personName: true,
+        ...relatedSelect,
+      },
+      orderBy: { date: 'desc' },
+      skip,
+      take,
+    }),
+    prisma.interest.count({ where }),
+  ])
+
+  return { records, total, page, pageSize }
+}
+
+function buildInterestWhereInput(
+  data: Pick<
+    ListInterestInput,
+    | 'source'
+    | 'jinisId'
+    | 'jinisCharaId'
+    | 'personName'
+    | 'amountMin'
+    | 'amountMax'
+    | 'date'
+    | 'from'
+    | 'to'
+  >,
+) {
   const filters: InterestWhereInput[] = []
 
   if (data.source === 'jinis') {
@@ -159,30 +200,7 @@ export async function listInterestRecords(data: ListInterestInput) {
     })
   }
 
-  const where = filters.length ? { AND: filters } : undefined
-  const { page, pageSize, skip, take } = paginationArgs(data.page, data.pageSize)
-
-  const [records, total] = await Promise.all([
-    prisma.interest.findMany({
-      where,
-      select: {
-        id: true,
-        amount: true,
-        date: true,
-        remarks: true,
-        jinisId: true,
-        jinisCharaId: true,
-        personName: true,
-        ...relatedSelect,
-      },
-      orderBy: { date: 'desc' },
-      skip,
-      take,
-    }),
-    prisma.interest.count({ where }),
-  ])
-
-  return { records, total, page, pageSize }
+  return filters.length ? { AND: filters } : undefined
 }
 
 export async function getInterestRecord(data: InterestIdInput) {
@@ -318,6 +336,25 @@ export async function deleteInterestRecord(data: InterestIdInput) {
 
   await refreshDailyCalculationsForDates([existing.date])
   return { id: data.id }
+}
+
+export async function deleteAllInterestRecords(data: DeleteAllInterestInput) {
+  const where = buildInterestWhereInput(data)
+
+  const matching = await prisma.interest.findMany({
+    where,
+    select: { date: true },
+  })
+
+  if (matching.length === 0) {
+    return { deleted: 0 }
+  }
+
+  await prisma.interest.deleteMany({ where })
+
+  await refreshDailyCalculationsForDates(matching.map((record) => record.date))
+
+  return { deleted: matching.length }
 }
 
 export async function sumInterestAmount() {

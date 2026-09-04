@@ -98,6 +98,11 @@ export const listInterestSchema = z.object({
   ...listPaginationSchema.shape,
 })
 
+export const deleteAllInterestSchema = listInterestSchema.omit({
+  page: true,
+  pageSize: true,
+})
+
 export const interestSearchSchema = z.object({
   source: interestSourceSchema.default('all'),
   jinisId: z.string().trim().optional(),

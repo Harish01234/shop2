@@ -6,6 +6,7 @@ import { refetchJinisLists } from '#/features/jinis/jinis.queries'
 import { refetchJinisCharaLists } from '#/features/jinischara/jinischara.queries'
 import {
   createInterest,
+  deleteAllInterest,
   deleteInterest,
   updateInterest,
 } from './interest.functions'
@@ -17,6 +18,7 @@ import {
 import type { InterestFilterValues } from './interest.filters'
 import type {
   CreateInterestInput,
+  DeleteAllInterestInput,
   InterestRecord,
   InterestSource,
   UpdateInterestInput,
@@ -85,6 +87,36 @@ export function useUpdateInterest() {
     onError: (error) => {
       toast.add({
         title: 'Could not update Interest',
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      })
+    },
+  })
+}
+
+export function useDeleteAllInterest() {
+  const queryClient = useQueryClient()
+  const deleteAllInterestFn = useServerFn(deleteAllInterest)
+
+  return useMutation({
+    mutationFn: (data: DeleteAllInterestInput) =>
+      deleteAllInterestFn({ data }),
+    onSuccess: async (result) => {
+      await Promise.all([
+        refetchInterestLists(queryClient),
+        refetchDailyCalculations(queryClient),
+      ])
+      toast.add({
+        title:
+          result.deleted === 1
+            ? '1 Interest record deleted'
+            : `${result.deleted} Interest records deleted`,
+        type: 'success',
+      })
+    },
+    onError: (error) => {
+      toast.add({
+        title: 'Could not delete Interest records',
         description: getErrorMessage(error, 'Please try again.'),
         type: 'error',
       })
