@@ -59,8 +59,9 @@ function mergeLinkOption(
 type LinkType = 'jinis' | 'jinischara' | 'person'
 
 function linkTypeFromRecord(interest?: InterestRecord): LinkType {
-  if (interest?.jinisId) return 'jinis'
-  if (interest?.jinisCharaId) return 'jinischara'
+  if (!interest) return 'jinis'
+  if (interest.jinisId) return 'jinis'
+  if (interest.jinisCharaId) return 'jinischara'
   return 'person'
 }
 
