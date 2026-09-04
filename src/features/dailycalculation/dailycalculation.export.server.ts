@@ -21,6 +21,7 @@ import {
   buildMainRightLines,
   exportBannerTitle,
   formatExportMoney,
+  type ExportSummaryLine,
 } from './dailycalculation.export-layout'
 import type {
   DailyCalculationDetail,
@@ -175,7 +176,7 @@ function writeBalanceRows(
   writeBalancePair(
     sheet,
     startRow,
-    'Daily Calculation — Difference (Val1 − Val2)',
+    'Daily Calculation - Difference (Val1 - Val2)',
     detail.difference,
     'Daily Calculation — Balance Status',
     balanceLabel(detail.balanceStatus),
@@ -434,9 +435,12 @@ const PDF_COLORS = {
   banner: '#2EC4B6' as PdfRgb,
   deoyaHeader: '#FFBF69' as PdfRgb,
   asolHeader: '#FFD166' as PdfRgb,
+  balanceBg: '#F5F5F5' as PdfRgb,
   grid: '#BBBBBB' as PdfRgb,
   white: '#FFFFFF' as PdfRgb,
   text: '#111111' as PdfRgb,
+  correct: '#047857' as PdfRgb,
+  incorrect: '#DC2626' as PdfRgb,
 }
 
 type PdfFonts = {
@@ -480,6 +484,15 @@ function textWidth(font: PDFFont, text: string, size: number) {
   return font.widthOfTextAtSize(text, size)
 }
 
+function sanitizePdfText(text: string) {
+  return text
+    .replace(/\u2212/g, '-')
+    .replace(/\u2013/g, '-')
+    .replace(/\u2014/g, '-')
+    .replace(/\u2018|\u2019/g, "'")
+    .replace(/\u201c|\u201d/g, '"')
+}
+
 function drawTextAt(
   page: PDFPage,
   pageHeight: number,
@@ -492,12 +505,13 @@ function drawTextAt(
   align: 'left' | 'right' | 'center',
   color: PdfRgb = PDF_COLORS.text,
 ) {
-  const tw = textWidth(font, text, size)
+  const safeText = sanitizePdfText(text)
+  const tw = textWidth(font, safeText, size)
   let drawX = x
   if (align === 'center') drawX = x + (width - tw) / 2
   if (align === 'right') drawX = x + width - tw
 
-  page.drawText(text, {
+  page.drawText(safeText, {
     x: drawX,
     y: topToPdfY(pageHeight, yFromTop + size),
     size,
@@ -506,7 +520,45 @@ function drawTextAt(
   })
 }
 
-function renderPdfBlock(
+function balanceStatusColor(status: 'CORRECT' | 'INCORRECT') {
+  return status === 'CORRECT' ? PDF_COLORS.correct : PDF_COLORS.incorrect
+}
+
+function drawPdfCell(
+  page: PDFPage,
+  pageHeight: number,
+  x: number,
+  yFromTop: number,
+  width: number,
+  height: number,
+  fill: PdfRgb,
+  text: string,
+  font: PDFFont,
+  size: number,
+  align: 'left' | 'right' | 'center',
+  textColor: PdfRgb = PDF_COLORS.text,
+) {
+  drawFilledRect(page, pageHeight, x, yFromTop, width, height, fill, true)
+  if (text) {
+    drawTextAt(
+      page,
+      pageHeight,
+      text,
+      x + 6,
+      yFromTop + (height - size) / 2,
+      width - 12,
+      size,
+      font,
+      align,
+      textColor,
+    )
+  }
+}
+
+const PDF_SUMMARY_TITLE_HEIGHT = 22
+const PDF_SUMMARY_ROW_HEIGHT = 18
+
+function renderPdfSummaryTable(
   page: PDFPage,
   pageHeight: number,
   fonts: PdfFonts,
@@ -517,20 +569,22 @@ function renderPdfBlock(
   bg: PdfRgb,
   lines: ReturnType<typeof buildDailyLeftLines>,
 ) {
-  const titleHeight = 20
-  const rowHeight = 17
-  const height = titleHeight + lines.length * rowHeight + 10
+  const titleHeight = PDF_SUMMARY_TITLE_HEIGHT
+  const rowHeight = PDF_SUMMARY_ROW_HEIGHT
+  const labelWidth = Math.round(width * 0.58)
+  const valueWidth = width - labelWidth
 
-  drawFilledRect(page, pageHeight, x, yFromTop, width, height, bg)
-  drawTextAt(
+  drawPdfCell(
     page,
     pageHeight,
+    x,
+    yFromTop,
+    width,
+    titleHeight,
+    bg,
     title,
-    x + 8,
-    yFromTop + 5,
-    width - 16,
-    10,
     fonts.bold,
+    10,
     'center',
   )
 
@@ -541,67 +595,421 @@ function renderPdfBlock(
       typeof line.value === 'number'
         ? formatExportMoney(line.value)
         : String(line.value)
-    drawTextAt(
+
+    drawPdfCell(
       page,
       pageHeight,
-      line.label,
-      x + 10,
+      x,
       rowTop,
-      width * 0.58,
-      9,
+      labelWidth,
+      rowHeight,
+      bg,
+      line.label,
       font,
+      9,
       'left',
     )
-    drawTextAt(
+    drawPdfCell(
       page,
       pageHeight,
-      valueText,
-      x + 10,
+      x + labelWidth,
       rowTop,
-      width - 20,
-      9,
+      valueWidth,
+      rowHeight,
+      bg,
+      valueText,
       font,
+      9,
       'right',
     )
     rowTop += rowHeight
   }
 
-  return height
+  return titleHeight + lines.length * rowHeight
 }
 
-function renderPdfTable(
+function renderPdfSummaryPadding(
   page: PDFPage,
   pageHeight: number,
   fonts: PdfFonts,
   x: number,
   yFromTop: number,
   width: number,
-  title: string,
-  headerBg: PdfRgb,
-  headers: string[],
-  rows: (string | number)[][],
-  colWidths: number[],
-  alignments: ('left' | 'right' | 'center')[],
-  boldLastRow = false,
+  bg: PdfRgb,
+  padRows: number,
 ) {
-  const rowHeight = 17
-  const headerHeight = 20
-  const titleHeight = 16
+  if (padRows <= 0) return
 
-  drawTextAt(
+  const rowHeight = PDF_SUMMARY_ROW_HEIGHT
+  const labelWidth = Math.round(width * 0.58)
+  const valueWidth = width - labelWidth
+
+  for (let index = 0; index < padRows; index += 1) {
+    const rowTop = yFromTop + index * rowHeight
+    drawPdfCell(
+      page,
+      pageHeight,
+      x,
+      rowTop,
+      labelWidth,
+      rowHeight,
+      bg,
+      '',
+      fonts.regular,
+      9,
+      'left',
+    )
+    drawPdfCell(
+      page,
+      pageHeight,
+      x + labelWidth,
+      rowTop,
+      valueWidth,
+      rowHeight,
+      bg,
+      '',
+      fonts.regular,
+      9,
+      'right',
+    )
+  }
+}
+
+function renderPdfSummaryPair(
+  page: PDFPage,
+  pageHeight: number,
+  fonts: PdfFonts,
+  leftX: number,
+  rightX: number,
+  blockWidth: number,
+  yFromTop: number,
+  leftTitle: string,
+  rightTitle: string,
+  leftBg: PdfRgb,
+  rightBg: PdfRgb,
+  leftLines: ExportSummaryLine[],
+  rightLines: ExportSummaryLine[],
+) {
+  const leftBody = filterValLines(leftLines)
+  const rightBody = filterValLines(rightLines)
+  const maxBodyRows = Math.max(leftBody.length, rightBody.length)
+
+  renderPdfSummaryTable(
     page,
     pageHeight,
-    title,
-    x,
+    fonts,
+    leftX,
     yFromTop,
-    width,
-    11,
-    fonts.bold,
-    'center',
+    blockWidth,
+    leftTitle,
+    leftBg,
+    leftBody,
+  )
+  renderPdfSummaryTable(
+    page,
+    pageHeight,
+    fonts,
+    rightX,
+    yFromTop,
+    blockWidth,
+    rightTitle,
+    rightBg,
+    rightBody,
   )
 
-  const headerTop = yFromTop + titleHeight
-  drawFilledRect(page, pageHeight, x, headerTop, width, headerHeight, headerBg)
+  const bodyTop = yFromTop + PDF_SUMMARY_TITLE_HEIGHT
+  renderPdfSummaryPadding(
+    page,
+    pageHeight,
+    fonts,
+    leftX,
+    bodyTop + leftBody.length * PDF_SUMMARY_ROW_HEIGHT,
+    blockWidth,
+    leftBg,
+    maxBodyRows - leftBody.length,
+  )
+  renderPdfSummaryPadding(
+    page,
+    pageHeight,
+    fonts,
+    rightX,
+    bodyTop + rightBody.length * PDF_SUMMARY_ROW_HEIGHT,
+    blockWidth,
+    rightBg,
+    maxBodyRows - rightBody.length,
+  )
+
+  const blockHeight =
+    PDF_SUMMARY_TITLE_HEIGHT + maxBodyRows * PDF_SUMMARY_ROW_HEIGHT
+  const valRowTop = yFromTop + blockHeight
+
+  renderPdfPairedValRow(
+    page,
+    pageHeight,
+    fonts,
+    leftX,
+    rightX,
+    blockWidth,
+    valRowTop,
+    leftBg,
+    rightBg,
+    extractValLine(leftLines, 'Val1'),
+    extractValLine(rightLines, 'Val2'),
+  )
+
+  return blockHeight + PDF_SUMMARY_ROW_HEIGHT
+}
+
+function renderPdfBalanceRows(
+  page: PDFPage,
+  pageHeight: number,
+  fonts: PdfFonts,
+  x: number,
+  yFromTop: number,
+  width: number,
+  detail: DailyCalculationDetail,
+  main: MainCalculationRecord | null,
+) {
+  const rowHeight = 20
+  const gap = 8
+  const pairWidth = (width - gap) / 2
+  const labelWidth = Math.round(pairWidth * 0.62)
+  const valueWidth = pairWidth - labelWidth
+  const bg = PDF_COLORS.balanceBg
+
+  function drawBalanceRow(
+    rowTop: number,
+    differenceLabel: string,
+    difference: number,
+    statusLabel: string,
+    status: 'CORRECT' | 'INCORRECT',
+  ) {
+    drawPdfCell(
+      page,
+      pageHeight,
+      x,
+      rowTop,
+      labelWidth,
+      rowHeight,
+      bg,
+      differenceLabel,
+      fonts.bold,
+      8,
+      'left',
+    )
+    drawPdfCell(
+      page,
+      pageHeight,
+      x + labelWidth,
+      rowTop,
+      valueWidth,
+      rowHeight,
+      bg,
+      formatExportMoney(difference),
+      fonts.bold,
+      9,
+      'right',
+    )
+    const statusX = x + pairWidth + gap
+    drawPdfCell(
+      page,
+      pageHeight,
+      statusX,
+      rowTop,
+      labelWidth,
+      rowHeight,
+      bg,
+      statusLabel,
+      fonts.bold,
+      8,
+      'left',
+    )
+    drawPdfCell(
+      page,
+      pageHeight,
+      statusX + labelWidth,
+      rowTop,
+      valueWidth,
+      rowHeight,
+      bg,
+      balanceLabel(status),
+      fonts.bold,
+      9,
+      'left',
+      balanceStatusColor(status),
+    )
+  }
+
+  drawBalanceRow(
+    yFromTop,
+    'Daily Calculation - Difference (Val1 - Val2)',
+    detail.difference,
+    'Daily Calculation — Balance Status',
+    detail.balanceStatus,
+  )
+
+  if (!main) {
+    return rowHeight
+  }
+
+  drawBalanceRow(
+    yFromTop + rowHeight,
+    'Main Calculation — Difference',
+    main.difference,
+    'Main Calculation — Balance Status',
+    main.balanceStatus,
+  )
+
+  return rowHeight * 2
+}
+
+function filterValLines(lines: ExportSummaryLine[]) {
+  return lines.filter(
+    (line) => line.label !== 'Val1' && line.label !== 'Val2',
+  )
+}
+
+function extractValLine(lines: ExportSummaryLine[], label: 'Val1' | 'Val2') {
+  const line = lines.find((entry) => entry.label === label)
+  if (!line) {
+    throw new Error(`Missing ${label} in export summary lines`)
+  }
+  return line
+}
+
+function formatExportLineValue(value: number | string) {
+  return typeof value === 'number' ? formatExportMoney(value) : String(value)
+}
+
+function renderPdfPairedValRow(
+  page: PDFPage,
+  pageHeight: number,
+  fonts: PdfFonts,
+  leftX: number,
+  rightX: number,
+  blockWidth: number,
+  yFromTop: number,
+  leftBg: PdfRgb,
+  rightBg: PdfRgb,
+  val1: ExportSummaryLine,
+  val2: ExportSummaryLine,
+) {
+  const rowHeight = PDF_SUMMARY_ROW_HEIGHT
+  const labelWidth = Math.round(blockWidth * 0.32)
+  const valueWidth = blockWidth - labelWidth
+
+  drawPdfCell(
+    page,
+    pageHeight,
+    leftX,
+    yFromTop,
+    labelWidth,
+    rowHeight,
+    leftBg,
+    val1.label,
+    fonts.bold,
+    9,
+    'left',
+  )
+  drawPdfCell(
+    page,
+    pageHeight,
+    leftX + labelWidth,
+    yFromTop,
+    valueWidth,
+    rowHeight,
+    leftBg,
+    formatExportLineValue(val1.value),
+    fonts.bold,
+    9,
+    'right',
+  )
+  drawPdfCell(
+    page,
+    pageHeight,
+    rightX,
+    yFromTop,
+    labelWidth,
+    rowHeight,
+    rightBg,
+    val2.label,
+    fonts.bold,
+    9,
+    'left',
+  )
+  drawPdfCell(
+    page,
+    pageHeight,
+    rightX + labelWidth,
+    yFromTop,
+    valueWidth,
+    rowHeight,
+    rightBg,
+    formatExportLineValue(val2.value),
+    fonts.bold,
+    9,
+    'right',
+  )
+
+  return rowHeight
+}
+
+type PdfRenderContext = {
+  doc: PDFDocument
+  fonts: PdfFonts
+  pageWidth: number
+  pageHeight: number
+  margin: number
+  currentPage: PDFPage
+}
+
+type PdfColumnCursor = {
+  page: PDFPage
+  y: number
+}
+
+function createPdfRenderContext(
+  doc: PDFDocument,
+  fonts: PdfFonts,
+  landscape: boolean,
+): PdfRenderContext {
+  const pageWidth = landscape ? 841.89 : 595.28
+  const pageHeight = landscape ? 595.28 : 841.89
+  const currentPage = doc.addPage([pageWidth, pageHeight])
+
+  return {
+    doc,
+    fonts,
+    pageWidth,
+    pageHeight,
+    margin: 36,
+    currentPage,
+  }
+}
+
+function addPdfPage(ctx: PdfRenderContext) {
+  ctx.currentPage = ctx.doc.addPage([ctx.pageWidth, ctx.pageHeight])
+  return ctx.currentPage
+}
+
+function pdfBottomLimit(ctx: PdfRenderContext) {
+  return ctx.pageHeight - ctx.margin
+}
+
+function drawPdfTableHeader(
+  page: PDFPage,
+  pageHeight: number,
+  fonts: PdfFonts,
+  x: number,
+  yFromTop: number,
+  width: number,
+  headerBg: PdfRgb,
+  headers: string[],
+  colWidths: number[],
+  alignments: ('left' | 'right' | 'center')[],
+  headerHeight: number,
+) {
+  drawFilledRect(page, pageHeight, x, yFromTop, width, headerHeight, headerBg)
 
   let columnX = x
   headers.forEach((header, index) => {
@@ -610,7 +1018,7 @@ function renderPdfTable(
       pageHeight,
       header,
       columnX + 4,
-      headerTop + 5,
+      yFromTop + 5,
       colWidths[index]! - 8,
       9,
       fonts.bold,
@@ -618,63 +1026,152 @@ function renderPdfTable(
     )
     columnX += colWidths[index]!
   })
+}
 
-  let rowTop = headerTop + headerHeight
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    const row = rows[rowIndex]!
-    const isTotalRow = boldLastRow && rowIndex === rows.length - 1
-    const font = isTotalRow ? fonts.bold : fonts.regular
+function drawPdfTableBodyRow(
+  page: PDFPage,
+  pageHeight: number,
+  fonts: PdfFonts,
+  x: number,
+  yFromTop: number,
+  width: number,
+  row: (string | number)[],
+  colWidths: number[],
+  alignments: ('left' | 'right' | 'center')[],
+  rowHeight: number,
+  bold: boolean,
+) {
+  const font = bold ? fonts.bold : fonts.regular
+  let columnX = x
 
-    columnX = x
-    for (let index = 0; index < row.length; index += 1) {
-      const cell = row[index]!
-      const text =
-        typeof cell === 'number' ? formatExportMoney(cell) : String(cell)
-      drawTextAt(
-        page,
-        pageHeight,
-        text,
-        columnX + 4,
-        rowTop + 4,
-        colWidths[index]! - 8,
-        9,
-        font,
-        alignments[index]!,
-      )
+  for (let index = 0; index < row.length; index += 1) {
+    const cell = row[index]!
+    const text =
+      typeof cell === 'number' ? formatExportMoney(cell) : String(cell)
+    drawTextAt(
+      page,
+      pageHeight,
+      text,
+      columnX + 4,
+      yFromTop + 4,
+      colWidths[index]! - 8,
+      9,
+      font,
+      alignments[index]!,
+    )
 
-      if (index > 0) {
-        page.drawLine({
-          start: { x: columnX, y: topToPdfY(pageHeight, rowTop + rowHeight) },
-          end: { x: columnX, y: topToPdfY(pageHeight, rowTop) },
-          thickness: 0.5,
-          color: hexToColor(PDF_COLORS.grid),
-        })
-      }
-
-      columnX += colWidths[index]!
+    if (index > 0) {
+      page.drawLine({
+        start: { x: columnX, y: topToPdfY(pageHeight, yFromTop + rowHeight) },
+        end: { x: columnX, y: topToPdfY(pageHeight, yFromTop) },
+        thickness: 0.5,
+        color: hexToColor(PDF_COLORS.grid),
+      })
     }
 
-    page.drawRectangle({
-      x,
-      y: topToPdfY(pageHeight, rowTop + rowHeight),
-      width,
-      height: rowHeight,
-      borderColor: hexToColor(PDF_COLORS.grid),
-      borderWidth: 0.75,
-    })
-    rowTop += rowHeight
+    columnX += colWidths[index]!
   }
 
   page.drawRectangle({
     x,
-    y: topToPdfY(pageHeight, rowTop),
+    y: topToPdfY(pageHeight, yFromTop + rowHeight),
     width,
-    height: rowTop - headerTop,
+    height: rowHeight,
     borderColor: hexToColor(PDF_COLORS.grid),
     borderWidth: 0.75,
   })
+}
 
-  return rowTop - yFromTop
+function renderPdfTablePaginated(
+  ctx: PdfRenderContext,
+  cursor: PdfColumnCursor,
+  x: number,
+  width: number,
+  title: string,
+  headerBg: PdfRgb,
+  headers: string[],
+  rows: (string | number)[][],
+  colWidths: number[],
+  alignments: ('left' | 'right' | 'center')[],
+  options: { boldLastRow?: boolean } = {},
+): PdfColumnCursor {
+  const rowHeight = 17
+  const headerHeight = 20
+  const titleHeight = 16
+  const bottomLimit = pdfBottomLimit(ctx)
+  const boldLastRow = options.boldLastRow ?? false
+
+  let rowIndex = 0
+  let titleDrawn = false
+
+  while (rowIndex < rows.length) {
+    const needsTitle = !titleDrawn
+    const segmentOverhead =
+      (needsTitle ? titleHeight : 0) + headerHeight + rowHeight
+
+    if (cursor.y + segmentOverhead > bottomLimit) {
+      cursor.page = addPdfPage(ctx)
+      cursor.y = ctx.margin
+    }
+
+    if (needsTitle) {
+      drawTextAt(
+        cursor.page,
+        ctx.pageHeight,
+        title,
+        x,
+        cursor.y,
+        width,
+        11,
+        ctx.fonts.bold,
+        'center',
+      )
+      cursor.y += titleHeight
+      titleDrawn = true
+    }
+
+    drawPdfTableHeader(
+      cursor.page,
+      ctx.pageHeight,
+      ctx.fonts,
+      x,
+      cursor.y,
+      width,
+      headerBg,
+      headers,
+      colWidths,
+      alignments,
+      headerHeight,
+    )
+    cursor.y += headerHeight
+
+    while (rowIndex < rows.length) {
+      if (cursor.y + rowHeight > bottomLimit) {
+        cursor.page = addPdfPage(ctx)
+        cursor.y = ctx.margin
+        break
+      }
+
+      const isTotalRow = boldLastRow && rowIndex === rows.length - 1
+      drawPdfTableBodyRow(
+        cursor.page,
+        ctx.pageHeight,
+        ctx.fonts,
+        x,
+        cursor.y,
+        width,
+        rows[rowIndex]!,
+        colWidths,
+        alignments,
+        rowHeight,
+        isTotalRow,
+      )
+      cursor.y += rowHeight
+      rowIndex += 1
+    }
+  }
+
+  return cursor
 }
 
 async function renderPdf(
@@ -682,79 +1179,74 @@ async function renderPdf(
   scope: DailyCalculationExportScope,
 ): Promise<Buffer> {
   const landscape = scope === 'full'
-  const pageWidth = landscape ? 841.89 : 595.28
-  const pageHeight = landscape ? 595.28 : 841.89
-  const margin = 36
 
   const pdfDoc = await PDFDocument.create()
   const fonts: PdfFonts = {
     regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
     bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
   }
-  const page = pdfDoc.addPage([pageWidth, pageHeight])
+  const ctx = createPdfRenderContext(pdfDoc, fonts, landscape)
+  const page = ctx.currentPage
+  const pageHeight = ctx.pageHeight
 
-  const contentWidth = pageWidth - margin * 2
+  const contentWidth = ctx.pageWidth - ctx.margin * 2
   const gap = 12
   const blockWidth = (contentWidth - gap) / 2
-  const leftX = margin
+  const leftX = ctx.margin
   const rightX = leftX + blockWidth + gap
-  let y = margin
+  let y = ctx.margin
 
-  const dailyLeftH = renderPdfBlock(
+  const dailyLeftLines = buildDailyLeftLines(payload.detail)
+  const dailyRightLines = buildDailyRightLines(payload.detail)
+
+  y += renderPdfSummaryPair(
     page,
     pageHeight,
     fonts,
     leftX,
-    y,
-    blockWidth,
-    'Daily Calculation — Left',
-    PDF_COLORS.dailyLeft,
-    buildDailyLeftLines(payload.detail),
-  )
-  const dailyRightH = renderPdfBlock(
-    page,
-    pageHeight,
-    fonts,
     rightX,
-    y,
     blockWidth,
+    y,
+    'Daily Calculation — Left',
     'Daily Calculation — Right',
+    PDF_COLORS.dailyLeft,
     PDF_COLORS.dailyRight,
-    buildDailyRightLines(payload.detail),
+    dailyLeftLines,
+    dailyRightLines,
   )
-
-  y += Math.max(dailyLeftH, dailyRightH) + 14
+  y += 14
 
   const mainLeftLines = buildMainLeftLines(payload.mainCalculation)
   const mainRightLines = buildMainRightLines(payload.mainCalculation)
 
   if (payload.mainCalculation) {
-    const mainLeftH = renderPdfBlock(
+    y += renderPdfSummaryPair(
       page,
       pageHeight,
       fonts,
       leftX,
-      y,
-      blockWidth,
-      'Main Calculation — Left',
-      PDF_COLORS.mainLeft,
-      mainLeftLines,
-    )
-    const mainRightH = renderPdfBlock(
-      page,
-      pageHeight,
-      fonts,
       rightX,
-      y,
       blockWidth,
+      y,
+      'Main Calculation — Left',
       'Main Calculation — Right',
+      PDF_COLORS.mainLeft,
       PDF_COLORS.mainRight,
+      mainLeftLines,
       mainRightLines,
     )
-    y += Math.max(mainLeftH, mainRightH) + 12
+    y += 12
   } else {
     const blockHeight = 52
-    drawFilledRect(page, pageHeight, leftX, y, contentWidth, blockHeight, PDF_COLORS.mainLeft)
+    drawFilledRect(
+      page,
+      pageHeight,
+      leftX,
+      y,
+      contentWidth,
+      blockHeight,
+      PDF_COLORS.mainLeft,
+    )
     drawTextAt(
       page,
       pageHeight,
@@ -769,32 +1261,18 @@ async function renderPdf(
     y += blockHeight + 12
   }
 
-  drawTextAt(
+  const balanceHeight = renderPdfBalanceRows(
     page,
     pageHeight,
-    `Daily Calculation — Difference: ${formatExportMoney(payload.detail.difference)} · ${balanceLabel(payload.detail.balanceStatus)}`,
+    fonts,
     leftX,
     y,
-    blockWidth,
-    9,
-    fonts.regular,
-    'left',
+    contentWidth,
+    payload.detail,
+    payload.mainCalculation,
   )
-  if (payload.mainCalculation) {
-    drawTextAt(
-      page,
-      pageHeight,
-      `Main Calculation — Difference: ${formatExportMoney(payload.mainCalculation.difference)} · ${balanceLabel(payload.mainCalculation.balanceStatus)}`,
-      rightX,
-      y,
-      blockWidth,
-      9,
-      fonts.regular,
-      'left',
-    )
-  }
 
-  y += 22
+  y += balanceHeight + 14
 
   drawFilledRect(page, pageHeight, leftX, y, contentWidth, 28, PDF_COLORS.banner, false)
   drawTextAt(
@@ -848,12 +1326,14 @@ async function renderPdf(
           ])
         : [['—', '—', '—', 'No records']]
 
-    const deoyaH = renderPdfTable(
-      page,
-      pageHeight,
-      fonts,
+    const tableStartY = y
+    const deoyaCursor: PdfColumnCursor = { page: ctx.currentPage, y: tableStartY }
+    const asolCursor: PdfColumnCursor = { page: ctx.currentPage, y: tableStartY }
+
+    renderPdfTablePaginated(
+      ctx,
+      deoyaCursor,
       leftX,
-      y,
       tableWidth,
       'Deoya',
       PDF_COLORS.deoyaHeader,
@@ -861,14 +1341,12 @@ async function renderPdf(
       deoyaRows,
       deoyaCols,
       ['left', 'right', 'left'],
-      true,
+      { boldLastRow: true },
     )
-    const asolH = renderPdfTable(
-      page,
-      pageHeight,
-      fonts,
+    renderPdfTablePaginated(
+      ctx,
+      asolCursor,
       leftX + tableWidth + tableGap,
-      y,
       tableWidth,
       'Asol + Sudh',
       PDF_COLORS.asolHeader,
@@ -877,8 +1355,6 @@ async function renderPdf(
       asolCols,
       ['left', 'right', 'right', 'left'],
     )
-
-    y += Math.max(deoyaH, asolH)
   }
 
   const bytes = await pdfDoc.save()

@@ -94,6 +94,7 @@ export function buildMainRightLines(
   }
 
   return [
+    { label: 'Bandak', value: main.bandak },
     { label: 'Jinis Chara', value: main.jinisChara },
     { label: 'Cash', value: main.cash },
     { label: 'Val2', value: main.rightTotal, bold: true },
