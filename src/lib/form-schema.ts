@@ -70,6 +70,15 @@ export const requiredPositiveNumber = (
     z.number({ error: emptyMessage }).positive(invalidMessage),
   )
 
+export const requiredNonNegativeNumber = (
+  emptyMessage: string,
+  invalidMessage = emptyMessage,
+) =>
+  z.preprocess(
+    toFiniteNumber,
+    z.number({ error: emptyMessage }).nonnegative(invalidMessage),
+  )
+
 export const optionalNonNegativeNumber = z.preprocess((value) => {
   const next = blankToUndefined(value)
   if (next === undefined) return undefined

@@ -26,7 +26,7 @@ import {
   formatMoney,
   formatPeriodLabel,
 } from '#/features/dailycalculation/dailycalculation.utils'
-import { formatCalendarDate, parseDateInput, toDateInput } from '#/lib/calendar-date'
+import { formatCalendarDate } from '#/lib/calendar-date'
 import { InterestModal } from '#/features/interest/component/interest-modal'
 import { getInterest } from '#/features/interest/interest.functions'
 import { useDeleteInterest } from '#/features/interest/interest.hooks'
@@ -77,21 +77,6 @@ type DailyCalculationDetailViewProps = {
 
 function formatDetailDate(value: Date | string) {
   return formatCalendarDate(value)
-}
-
-function defaultInterestDateInPeriod(
-  periodStart: Date | string,
-  periodEnd: Date | string,
-) {
-  const start = toDateInput(periodStart)
-  const end = toDateInput(periodEnd)
-  const today = toDateInput(new Date())
-
-  if (today && start && end && today >= start && today <= end) {
-    return parseDateInput(today)
-  }
-
-  return parseDateInput(end || start || toDateInput(new Date()))
 }
 
 function DetailColumnEmpty({ message }: { message: string }) {
@@ -756,11 +741,6 @@ export function DailyCalculationDetailView({
         }}
         interest={editingInterest}
         asolContext={interestAsolContext}
-        defaultDate={
-          editingInterest
-            ? undefined
-            : defaultInterestDateInPeriod(detail.periodStart, detail.periodEnd)
-        }
         onSuccess={() => {
           setEditingInterest(undefined)
           setInterestAsolContext(undefined)

@@ -17,6 +17,7 @@ import type {
   JinisLinkOption,
   JinisListResult,
   JinisRecord,
+  JinisSlNoSort,
   JinisView,
   ListJinisInput,
 } from './jinis.types'
@@ -36,8 +37,9 @@ export function jinisListQueryOptions(
   view: JinisView,
   filters: JinisFilterValues = {},
   page = 1,
+  slNoSort: JinisSlNoSort = 'desc',
 ) {
-  const input = toListJinisInput(view, filters, page)
+  const input = toListJinisInput(view, filters, page, slNoSort)
 
   return queryOptions({
     queryKey: jinisKeys.list(input),

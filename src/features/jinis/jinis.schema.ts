@@ -4,8 +4,8 @@ import { listPaginationSchema } from '#/lib/pagination'
 import {
   calendarDateField,
   optionalCalendarDateField,
+  requiredNonNegativeNumber,
   requiredPositiveInt,
-  requiredPositiveNumber,
   requiredText,
 } from '#/lib/form-schema'
 
@@ -23,7 +23,10 @@ export const jinisItemTypeSchema = z.enum([
 
 export const jinisItemSchema = z.object({
   name: requiredText('Enter an item name'),
-  wet: requiredPositiveNumber('Enter weight', 'Weight must be greater than 0'),
+  wet: requiredNonNegativeNumber(
+    'Enter weight',
+    'Weight cannot be negative',
+  ),
   type: jinisItemTypeSchema,
 })
 
@@ -73,6 +76,8 @@ export const jinisIdSchema = z.object({
 
 export const jinisViewSchema = z.enum(['open', 'settled', 'all'])
 
+export const jinisSlNoSortSchema = z.enum(['asc', 'desc'])
+
 export const listJinisSchema = z.object({
   active: z.boolean().optional(),
   slNo: z.string().trim().optional(),
@@ -85,6 +90,7 @@ export const listJinisSchema = z.object({
   date: z.string().trim().optional(),
   from: z.string().trim().optional(),
   to: z.string().trim().optional(),
+  slNoSort: jinisSlNoSortSchema.optional().default('desc'),
   ...listPaginationSchema.shape,
 })
 
@@ -100,6 +106,7 @@ export const jinisSearchSchema = z.object({
   date: z.string().trim().optional(),
   from: z.string().trim().optional(),
   to: z.string().trim().optional(),
+  slNoSort: jinisSlNoSortSchema.optional(),
   page: z.coerce.number().int().positive().optional(),
 })
 

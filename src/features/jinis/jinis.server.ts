@@ -126,7 +126,7 @@ export async function listJinisRecords(data: ListJinisInput) {
   const [records, total, allCount, activeCount] = await Promise.all([
     prisma.jinis.findMany({
       where,
-      orderBy: { date: 'desc' },
+      orderBy: { slNo: data.slNoSort ?? 'desc' },
       skip,
       take,
       select: jinisListSelect,

@@ -19,6 +19,7 @@ import type { JinisFilterValues } from './jinis.filters'
 import type {
   CreateJinisInput,
   JinisRecord,
+  JinisSlNoSort,
   JinisView,
   UpdateJinisInput,
 } from './jinis.types'
@@ -29,8 +30,9 @@ export function useJinisList(
   view: JinisView,
   filters: JinisFilterValues = {},
   page = 1,
+  slNoSort: JinisSlNoSort = 'desc',
 ) {
-  return useQuery(jinisListQueryOptions(view, filters, page))
+  return useQuery(jinisListQueryOptions(view, filters, page, slNoSort))
 }
 
 export function useJinisLinkOptions(enabled = true, query = '') {

@@ -16,6 +16,7 @@ type JinisModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   jinis?: JinisRecord
+  defaultDate?: Date
   onSuccess: () => void
 }
 
@@ -23,6 +24,7 @@ export function JinisModal({
   open,
   onOpenChange,
   jinis,
+  defaultDate,
   onSuccess,
 }: JinisModalProps) {
   const isEdit = Boolean(jinis)
@@ -56,6 +58,7 @@ export function JinisModal({
           <JinisForm
             key={formRecord?.id ?? 'new'}
             jinis={formRecord}
+            defaultDate={defaultDate}
             onCancel={() => onOpenChange(false)}
             onSuccess={() => {
               onSuccess()

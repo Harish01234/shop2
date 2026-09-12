@@ -113,6 +113,28 @@ export function inclusivePeriod(
   }
 }
 
+/**
+ * Activity window for Asol / Sudh / Deoya.
+ * OPEN records grow from periodStart through today.
+ * CLOSED records use the stored inclusive periodEnd.
+ */
+export function queryPeriodForCalculation(
+  periodStart: Date | string,
+  periodEnd: Date | string | null | undefined,
+  recordStatus: 'OPEN' | 'CLOSED' = 'CLOSED',
+) {
+  const startDay = toCalendarDay(periodStart)
+  const today = todayDateInput()
+  const endDay =
+    recordStatus === 'OPEN'
+      ? today >= startDay
+        ? today
+        : startDay
+      : toCalendarDay(periodEnd ?? today)
+
+  return inclusivePeriod(startDay, endDay)
+}
+
 export function uniqueCalendarDays(
   values: Array<Date | string | null | undefined>,
 ) {

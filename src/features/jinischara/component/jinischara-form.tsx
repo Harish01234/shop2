@@ -13,6 +13,7 @@ import type { JinisCharaRecord } from '#/features/jinischara/jinischara.types'
 import {
   getErrorMessage,
   DEFAULT_JINISCHARA_PERCENTAGE,
+  createJinisCharaFormDefaults,
 } from '#/features/jinischara/jinischara.utils'
 import { toDateInput } from '#/lib/calendar-date'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -36,12 +37,14 @@ import { Textarea } from '@/components/ui/textarea'
 
 type JinisCharaFormProps = {
   jinisChara?: JinisCharaRecord
+  defaultDate?: Date
   onSuccess: () => void
   onCancel: () => void
 }
 
 export function JinisCharaForm({
   jinisChara,
+  defaultDate,
   onSuccess,
   onCancel,
 }: JinisCharaFormProps) {
@@ -59,17 +62,28 @@ export function JinisCharaForm({
     resolver: zodResolver(createJinisCharaSchema),
     mode: 'onSubmit',
     reValidateMode: 'onChange',
-    defaultValues: {
-      slNo: jinisChara?.slNo,
-      name: jinisChara?.name ?? '',
-      fatherName: jinisChara?.fatherName ?? '',
-      phoneNo: jinisChara?.phoneNo ?? '',
-      credit: jinisChara?.credit,
-      percentage: jinisChara?.percentage ?? DEFAULT_JINISCHARA_PERCENTAGE,
-      description: jinisChara?.description ?? '',
-      date: toDateInput(jinisChara?.date) || toDateInput(new Date()),
-      active: jinisChara?.active ?? true,
-    },
+    defaultValues: jinisChara
+      ? {
+          slNo: jinisChara.slNo,
+          name: jinisChara.name,
+          fatherName: jinisChara.fatherName,
+          phoneNo: jinisChara.phoneNo,
+          credit: jinisChara.credit,
+          percentage: jinisChara.percentage ?? DEFAULT_JINISCHARA_PERCENTAGE,
+          description: jinisChara.description ?? '',
+          date: toDateInput(jinisChara.date) || toDateInput(new Date()),
+          active: jinisChara.active,
+        }
+      : {
+          ...createJinisCharaFormDefaults(),
+          ...(defaultDate
+            ? {
+                date:
+                  toDateInput(defaultDate) ||
+                  createJinisCharaFormDefaults().date,
+              }
+            : {}),
+        },
   })
 
   async function onSubmit(values: z.output<typeof createJinisCharaSchema>) {

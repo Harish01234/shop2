@@ -11,6 +11,7 @@ import {
   jinisViewSchema,
   listJinisSchema,
   jinisSearchSchema,
+  jinisSlNoSortSchema,
   settleJinisSchema,
   updateJinisSchema,
 } from './jinis.schema'
@@ -24,6 +25,7 @@ export type JinisIdInput = z.infer<typeof jinisIdSchema>
 export type ListJinisInput = z.infer<typeof listJinisSchema>
 export type JinisSearch = z.infer<typeof jinisSearchSchema>
 export type JinisView = z.infer<typeof jinisViewSchema>
+export type JinisSlNoSort = z.infer<typeof jinisSlNoSortSchema>
 export type SettleJinisInput = z.infer<typeof settleJinisSchema>
 
 export type JinisItemRecord = JinisItemInput & {

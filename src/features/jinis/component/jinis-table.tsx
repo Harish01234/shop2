@@ -1,7 +1,7 @@
 import { formatCalendarDate } from '#/lib/calendar-date'
-import { PencilIcon, Trash2Icon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, PencilIcon, Trash2Icon } from 'lucide-react'
 
-import type { JinisRecord } from '#/features/jinis/jinis.types'
+import type { JinisRecord, JinisSlNoSort } from '#/features/jinis/jinis.types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,6 +23,8 @@ import {
 
 type JinisTableProps = {
   records: JinisRecord[]
+  slNoSort: JinisSlNoSort
+  onSlNoSortToggle: () => void
   onCreate: () => void
   onEdit: (record: JinisRecord) => void
   onDelete: (record: JinisRecord) => void
@@ -32,6 +34,8 @@ type JinisTableProps = {
 
 export function JinisTable({
   records,
+  slNoSort,
+  onSlNoSortToggle,
   onCreate,
   onEdit,
   onDelete,
@@ -61,15 +65,33 @@ export function JinisTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>No</TableHead>
+            <TableHead className="w-[88px]">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="-ml-2 h-8 gap-1 px-2 font-medium text-foreground"
+                onClick={onSlNoSortToggle}
+                aria-label={
+                  slNoSort === 'desc'
+                    ? 'Sort by serial number ascending'
+                    : 'Sort by serial number descending'
+                }
+              >
+                No
+                {slNoSort === 'desc' ? (
+                  <ArrowDownIcon className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <ArrowUpIcon className="size-3.5" aria-hidden="true" />
+                )}
+              </Button>
+            </TableHead>
             <TableHead>Name</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Gold</TableHead>
-            <TableHead>Silver</TableHead>
-            <TableHead>Loan</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="sticky right-0 z-10 border-l border-border bg-card text-right">
+            <TableHead className="w-[100px]">Type</TableHead>
+            <TableHead className="text-right">Loan</TableHead>
+            <TableHead className="w-[112px]">Date</TableHead>
+            <TableHead className="w-[96px]">Status</TableHead>
+            <TableHead className="sticky right-0 z-10 w-[132px] border-l border-border bg-card text-right">
               Actions
             </TableHead>
           </TableRow>
@@ -89,9 +111,9 @@ export function JinisTable({
               <TableCell>
                 <Badge variant="outline">{record.type}</Badge>
               </TableCell>
-              <TableCell>{record.goldWeight.toFixed(2)}</TableCell>
-              <TableCell>{record.silverWeight.toFixed(2)}</TableCell>
-              <TableCell>{record.credit.toLocaleString('en-IN')}</TableCell>
+              <TableCell className="text-right">
+                {record.credit.toLocaleString('en-IN')}
+              </TableCell>
               <TableCell>
                 {formatCalendarDate(record.date)}
               </TableCell>

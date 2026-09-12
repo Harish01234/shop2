@@ -5,6 +5,7 @@ import { AlertCircleIcon } from 'lucide-react'
 
 import { AdvanceSearchFilter } from '#/features/jinis/component/AdvanceSearchFilter'
 import {
+  buildJinisSearch,
   filtersFromSearch,
   parseJinisSearch,
   type JinisFilterValues,
@@ -43,7 +44,7 @@ export const Route = createFileRoute('/jinis/')({
   loader: ({ context, deps }) => {
     const filters = filtersFromSearch(deps)
     return context.queryClient.ensureQueryData(
-      jinisListQueryOptions(deps.view, filters, deps.page),
+      jinisListQueryOptions(deps.view, filters, deps.page, deps.slNoSort),
     )
   },
   pendingComponent: JinisListPending,
@@ -107,8 +108,9 @@ function JinisListPage() {
   const currentView: JinisView = search.view
   const filters = filtersFromSearch(search)
   const page = search.page ?? 1
+  const slNoSort = search.slNoSort ?? 'desc'
   const navigate = useNavigate({ from: '/jinis/' })
-  const jinisQuery = useJinisList(currentView, filters, page)
+  const jinisQuery = useJinisList(currentView, filters, page, slNoSort)
   const deleteJinisMutation = useDeleteJinis()
   const toggleJinisMutation = useToggleJinis()
 
@@ -127,15 +129,24 @@ function JinisListPage() {
     (nextFilters: JinisFilterValues) => {
       void navigate({
         replace: true,
-        search: {
-          view: currentView,
-          ...nextFilters,
+        search: buildJinisSearch(currentView, nextFilters, {
           page: 1,
-        },
+          slNoSort,
+        }),
       })
     },
-    [currentView, navigate],
+    [currentView, navigate, slNoSort],
   )
+
+  function toggleSlNoSort() {
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        slNoSort: slNoSort === 'desc' ? 'asc' : 'desc',
+        page: 1,
+      }),
+    })
+  }
 
   function openCreateModal() {
     setEditingRecord(undefined)
@@ -233,6 +244,8 @@ function JinisListPage() {
 
       <JinisTable
         records={records}
+        slNoSort={slNoSort}
+        onSlNoSortToggle={toggleSlNoSort}
         onCreate={openCreateModal}
         onEdit={openEditModal}
         onDelete={setDeleteTarget}

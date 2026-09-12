@@ -12,6 +12,7 @@ type JinisCharaModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   jinisChara?: JinisCharaRecord
+  defaultDate?: Date
   onSuccess: () => void
 }
 
@@ -19,6 +20,7 @@ export function JinisCharaModal({
   open,
   onOpenChange,
   jinisChara,
+  defaultDate,
   onSuccess,
 }: JinisCharaModalProps) {
   const isEdit = Boolean(jinisChara)
@@ -37,6 +39,7 @@ export function JinisCharaModal({
         <JinisCharaForm
           key={jinisChara?.id ?? 'new'}
           jinisChara={jinisChara}
+          defaultDate={defaultDate}
           onCancel={() => onOpenChange(false)}
           onSuccess={() => {
             onSuccess()

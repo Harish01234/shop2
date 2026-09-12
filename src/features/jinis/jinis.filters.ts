@@ -1,4 +1,4 @@
-import type { JinisSearch, JinisType, JinisView, ListJinisInput } from './jinis.types'
+import type { JinisSearch, JinisType, JinisView, JinisSlNoSort, ListJinisInput } from './jinis.types'
 import { DEFAULT_PAGE_SIZE, parsePage } from '#/lib/pagination'
 
 export function activeFilterForView(view: JinisView) {
@@ -7,7 +7,7 @@ export function activeFilterForView(view: JinisView) {
   return undefined
 }
 
-export type JinisFilterValues = Omit<JinisSearch, 'view' | 'page'>
+export type JinisFilterValues = Omit<JinisSearch, 'view' | 'page' | 'slNoSort'>
 
 export const emptyJinisFilters: JinisFilterValues = {}
 
@@ -25,6 +25,7 @@ export function parseJinisSearch(search: Record<string, unknown>): JinisSearch {
     from: emptyToUndefined(search.from),
     to: emptyToUndefined(search.to),
     page: search.page,
+    slNoSort: search.slNoSort,
   }
 
   const view =
@@ -52,12 +53,13 @@ export function parseJinisSearch(search: Record<string, unknown>): JinisSearch {
     date: asString(parsed.date),
     from: asString(parsed.from),
     to: asString(parsed.to),
+    slNoSort: parsed.slNoSort === 'asc' ? 'asc' : 'desc',
     page: parsePage(parsed.page),
   }
 }
 
 export function filtersFromSearch(search: JinisSearch): JinisFilterValues {
-  const { view: _view, page: _page, ...filters } = search
+  const { view: _view, page: _page, slNoSort: _slNoSort, ...filters } = search
   return compactFilters(filters)
 }
 
@@ -84,14 +86,29 @@ export function toListJinisInput(
   view: JinisView,
   filters: JinisFilterValues,
   page = 1,
+  slNoSort: JinisSlNoSort = 'desc',
 ): ListJinisInput {
   const active = activeFilterForView(view)
   const compact = compactFilters(filters)
   return {
     ...(active === undefined ? {} : { active }),
     ...compact,
+    slNoSort,
     page,
     pageSize: DEFAULT_PAGE_SIZE,
+  }
+}
+
+export function buildJinisSearch(
+  view: JinisView,
+  filters: JinisFilterValues,
+  options: { page?: number; slNoSort?: JinisSlNoSort } = {},
+): JinisSearch {
+  return {
+    view,
+    page: options.page ?? 1,
+    slNoSort: options.slNoSort ?? 'desc',
+    ...compactFilters(filters),
   }
 }
 

@@ -5,7 +5,7 @@ import {
   canonicalizeCalendarDate,
   dayEnd,
   dayStart,
-  inclusivePeriod,
+  queryPeriodForCalculation,
   toCalendarDay,
 } from '#/lib/calendar-date'
 import { sumPersonMoneyTotal } from '#/features/dailycalculation/dailycalculation.utils'
@@ -60,6 +60,7 @@ async function computeLinkedDailyCalculationValues(dailyCalculationId: string) {
     select: {
       periodStart: true,
       periodEnd: true,
+      recordStatus: true,
       cashInHome: true,
       cashInShop: true,
       personMoneyEntries: {
@@ -68,9 +69,10 @@ async function computeLinkedDailyCalculationValues(dailyCalculationId: string) {
     },
   })
 
-  const { periodStart, periodEnd } = inclusivePeriod(
+  const { periodStart, periodEnd } = queryPeriodForCalculation(
     dailyCalculation.periodStart,
     dailyCalculation.periodEnd,
+    dailyCalculation.recordStatus,
   )
   const inPeriod = {
     gte: periodStart,

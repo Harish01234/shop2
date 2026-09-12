@@ -8,7 +8,7 @@ import { emptyItem, JinisItemFields } from './jinis-item-fields'
 import { useCreateJinis, useUpdateJinis } from '#/features/jinis/jinis.hooks'
 import { createJinisSchema } from '#/features/jinis/jinis.schema'
 import type { JinisRecord } from '#/features/jinis/jinis.types'
-import { getErrorMessage, sumJinisWeights } from '#/features/jinis/jinis.utils'
+import { getErrorMessage, createJinisFormDefaults, sumJinisWeights } from '#/features/jinis/jinis.utils'
 import { toDateInput } from '#/lib/calendar-date'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -29,11 +29,17 @@ import { Spinner } from '@/components/ui/spinner'
 
 type JinisFormProps = {
   jinis?: JinisRecord
+  defaultDate?: Date
   onSuccess: () => void
   onCancel: () => void
 }
 
-export function JinisForm({ jinis, onSuccess, onCancel }: JinisFormProps) {
+export function JinisForm({
+  jinis,
+  defaultDate,
+  onSuccess,
+  onCancel,
+}: JinisFormProps) {
   const isEdit = Boolean(jinis)
   const createJinisMutation = useCreateJinis()
   const updateJinisMutation = useUpdateJinis()
@@ -48,23 +54,30 @@ export function JinisForm({ jinis, onSuccess, onCancel }: JinisFormProps) {
     resolver: zodResolver(createJinisSchema),
     mode: 'onSubmit',
     reValidateMode: 'onChange',
-    defaultValues: {
-      slNo: jinis?.slNo,
-      name: jinis?.name ?? '',
-      fatherName: jinis?.fatherName ?? '',
-      phoneNo: jinis?.phoneNo ?? '',
-      credit: jinis?.credit,
-      type: jinis?.type ?? 'GOLD',
-      date: toDateInput(jinis?.date) || toDateInput(new Date()),
-      active: jinis?.active ?? true,
-      items: jinis?.items?.length
-        ? jinis.items.map((item) => ({
-            name: item.name,
-            wet: item.wet,
-            type: item.type,
-          }))
-        : [emptyItem()],
-    },
+    defaultValues: jinis
+      ? {
+          slNo: jinis.slNo,
+          name: jinis.name,
+          fatherName: jinis.fatherName,
+          phoneNo: jinis.phoneNo,
+          credit: jinis.credit,
+          type: jinis.type,
+          date: toDateInput(jinis.date) || toDateInput(new Date()),
+          active: jinis.active,
+          items: jinis.items?.length
+            ? jinis.items.map((item) => ({
+                name: item.name,
+                wet: item.wet,
+                type: item.type,
+              }))
+            : [emptyItem()],
+        }
+      : {
+          ...createJinisFormDefaults(),
+          ...(defaultDate
+            ? { date: toDateInput(defaultDate) || createJinisFormDefaults().date }
+            : {}),
+        },
   })
 
   const itemsArray = useFieldArray({

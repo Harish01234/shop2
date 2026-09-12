@@ -102,19 +102,25 @@ export function DailyCalculationForm({
 
   const [previewPeriod, setPreviewPeriod] = useState({
     periodStart: toDateInput(periodStart),
-    periodEnd: toDateInput(periodEnd),
+    periodEnd:
+      isEdit && record?.recordStatus === 'OPEN'
+        ? toDateInput(new Date())
+        : toDateInput(periodEnd),
   })
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setPreviewPeriod({
         periodStart: toDateInput(periodStart),
-        periodEnd: toDateInput(periodEnd),
+        periodEnd:
+          isEdit && record?.recordStatus === 'OPEN'
+            ? toDateInput(new Date())
+            : toDateInput(periodEnd),
       })
     }, 400)
 
     return () => window.clearTimeout(timer)
-  }, [periodStart, periodEnd])
+  }, [isEdit, periodEnd, periodStart, record?.recordStatus])
 
   const previewQuery = usePreviewDailyCalculation(
     previewPeriod.periodStart,
@@ -191,7 +197,8 @@ export function DailyCalculationForm({
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Period</CardTitle>
           <CardDescription>
-            Asol, Sudh, and Deoya use only activity inside these dates.
+            While open, Asol, Sudh, and Deoya include activity from period
+            start through today. Closing freezes the range.
           </CardDescription>
         </CardHeader>
         <CardContent>

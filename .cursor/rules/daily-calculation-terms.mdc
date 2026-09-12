@@ -31,4 +31,9 @@ A record issued in one period and settled in another counts as Deoya in the issu
 - `difference = leftTotal - rightTotal`
 - `balanceStatus = CORRECT` iff `difference === 0`
 
-Never use `createdAt` for Asol / Sudh / Deoya. Period queries are inclusive: `periodStart <= date <= periodEnd`. Periods must not overlap.
+Never use `createdAt` for Asol / Sudh / Deoya. Period queries are inclusive.
+
+An **OPEN** Daily Calculation is a growing range: `periodStart <= date <= today`. Do not stop at the stored `periodEnd` while it is still open.
+A **CLOSED** Daily Calculation uses the stored range: `periodStart <= date <= periodEnd`.
+
+Periods must not overlap. Treat an OPEN record as occupying `periodStart` through today when checking overlap.

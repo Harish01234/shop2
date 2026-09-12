@@ -5,6 +5,7 @@ import {
   dayEnd,
   dayStart,
   inclusivePeriod,
+  queryPeriodForCalculation,
   toCalendarDay,
   uniqueCalendarDays,
 } from '#/lib/calendar-date'
@@ -73,11 +74,15 @@ async function assertNoOverlappingPeriod(
 
   const records = await prisma.dailyCalculation.findMany({
     where: excludeId ? { id: { not: excludeId } } : undefined,
-    select: { id: true, periodStart: true, periodEnd: true },
+    select: { id: true, periodStart: true, periodEnd: true, recordStatus: true },
   })
 
   const overlapping = records.some((row) => {
-    const other = inclusivePeriod(row.periodStart, row.periodEnd)
+    const other = queryPeriodForCalculation(
+      row.periodStart,
+      row.periodEnd,
+      row.recordStatus,
+    )
     return (
       incoming.periodStart.getTime() <= other.periodEnd.getTime() &&
       incoming.periodEnd.getTime() >= other.periodStart.getTime()
@@ -96,13 +101,23 @@ export async function refreshDailyCalculationsForDates(
   if (days.length === 0) return
 
   const records = await prisma.dailyCalculation.findMany({
-    select: { id: true, periodStart: true, periodEnd: true },
+    select: {
+      id: true,
+      periodStart: true,
+      periodEnd: true,
+      recordStatus: true,
+    },
   })
 
   const ids = records
     .filter((row) => {
-      const start = toCalendarDay(row.periodStart)
-      const end = toCalendarDay(row.periodEnd)
+      const period = queryPeriodForCalculation(
+        row.periodStart,
+        row.periodEnd,
+        row.recordStatus,
+      )
+      const start = toCalendarDay(period.periodStart)
+      const end = toCalendarDay(period.periodEnd)
       return days.some((day) => start <= day && day <= end)
     })
     .map((row) => row.id)
@@ -302,7 +317,11 @@ export async function refreshDailyCalculationTotalsRecord(
     return null
   }
 
-  const period = inclusivePeriod(existing.periodStart, existing.periodEnd)
+  const period = queryPeriodForCalculation(
+    existing.periodStart,
+    existing.periodEnd,
+    existing.recordStatus,
+  )
   const totals = await computePeriodTotals({
     ...period,
     tabil: existing.tabil,
@@ -379,10 +398,14 @@ type PeriodInterestForAsolSudh = {
   } | null
 }
 
-function settledLoanCredit(
+function settledLoanCreditInPeriod(
   loan: { credit: number; settledAt: Date | null } | null | undefined,
+  periodStart: Date,
+  periodEnd: Date,
 ) {
-  return loan?.settledAt ? loan.credit : 0
+  if (!loan?.settledAt) return 0
+  if (loan.settledAt < periodStart || loan.settledAt > periodEnd) return 0
+  return loan.credit
 }
 
 function pushSettledLoanAsolSudhRows(
@@ -428,6 +451,8 @@ function buildAsolSudhRows(
   settledJinis: SettledLoanForAsolSudh[],
   settledJinisChara: SettledLoanForAsolSudh[],
   periodInterests: PeriodInterestForAsolSudh[],
+  periodStart: Date,
+  periodEnd: Date,
 ) {
   const asolSudhRows: DailyCalculationAsolSudhRow[] = []
   const includedInterestIds = new Set<string>()
@@ -454,7 +479,11 @@ function buildAsolSudhRows(
         interestId: interest.id,
         slNo: interest.jinis.slNo,
         personName: null,
-        amount: settledLoanCredit(interest.jinis),
+        amount: settledLoanCreditInPeriod(
+          interest.jinis,
+          periodStart,
+          periodEnd,
+        ),
         sudh: interest.amount,
         date: interest.date,
         source: 'Jinis',
@@ -468,7 +497,11 @@ function buildAsolSudhRows(
         interestId: interest.id,
         slNo: interest.jinisChara.slNo,
         personName: null,
-        amount: settledLoanCredit(interest.jinisChara),
+        amount: settledLoanCreditInPeriod(
+          interest.jinisChara,
+          periodStart,
+          periodEnd,
+        ),
         sudh: interest.amount,
         date: interest.date,
         source: 'JinisChara',
@@ -531,22 +564,32 @@ export async function getDailyCalculationDetailRecord(
     return null
   }
 
-  const { periodStart, periodEnd } = inclusivePeriod(
+  const period = queryPeriodForCalculation(
     record.periodStart,
     record.periodEnd,
+    record.recordStatus,
   )
+  const { periodStart, periodEnd } = period
   const inPeriod = {
     gte: periodStart,
     lte: periodEnd,
   }
 
   const [
+    totals,
     issuedJinis,
     issuedJinisChara,
     settledJinis,
     settledJinisChara,
     periodInterests,
   ] = await Promise.all([
+    computePeriodTotals({
+      ...period,
+      tabil: record.tabil,
+      cashInHome: record.cashInHome,
+      cashInShop: record.cashInShop,
+      personMoneyEntries: record.personMoneyEntries,
+    }),
       prisma.jinis.findMany({
         where: { date: inPeriod },
         select: { id: true, slNo: true, credit: true, date: true },
@@ -622,10 +665,13 @@ export async function getDailyCalculationDetailRecord(
     settledJinis,
     settledJinisChara,
     periodInterests,
+    periodStart,
+    periodEnd,
   )
 
   return {
     ...record,
+    ...totals,
     deoyaRows,
     asolSudhRows,
   }
@@ -638,7 +684,11 @@ export async function createDailyCalculationRecord(
   const periodStart = canonicalizeCalendarDate(data.periodStart)
   const periodEnd = canonicalizeCalendarDate(data.periodEnd)
   await assertNoOverlappingPeriod(periodStart, periodEnd)
-  const queryPeriod = inclusivePeriod(periodStart, periodEnd)
+  const queryPeriod = queryPeriodForCalculation(
+    periodStart,
+    periodEnd,
+    'OPEN',
+  )
 
   const totals = await computePeriodTotals({
     ...queryPeriod,
@@ -685,7 +735,11 @@ export async function updateDailyCalculationRecord(
     data.periodEnd ?? existing.periodEnd,
   )
   await assertNoOverlappingPeriod(periodStart, periodEnd, existing.id)
-  const queryPeriod = inclusivePeriod(periodStart, periodEnd)
+  const queryPeriod = queryPeriodForCalculation(
+    periodStart,
+    periodEnd,
+    existing.recordStatus,
+  )
 
   const personMoneyEntries =
     data.personMoneyEntries ?? existing.personMoneyEntries
@@ -737,7 +791,11 @@ export async function closeDailyCalculationRecord(
     return null
   }
 
-  const period = inclusivePeriod(existing.periodStart, existing.periodEnd)
+  const periodEnd =
+    existing.recordStatus === 'OPEN'
+      ? canonicalizeCalendarDate(new Date())
+      : canonicalizeCalendarDate(existing.periodEnd)
+  const period = inclusivePeriod(existing.periodStart, periodEnd)
   const totals = await computePeriodTotals({
     ...period,
     tabil: existing.tabil,
@@ -750,6 +808,7 @@ export async function closeDailyCalculationRecord(
     where: { id: data.id },
     data: {
       ...totals,
+      periodEnd,
       recordStatus: 'CLOSED',
       closedAt: data.closedAt ?? new Date(),
       lastEditedById: editedById,
