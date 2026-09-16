@@ -6,6 +6,8 @@ import {
   createInterestSchema,
   deleteAllInterestSchema,
   interestIdSchema,
+  interestImportPreviewInputSchema,
+  interestImportSchema,
   interestSearchSchema,
   interestSourceSchema,
   listInterestSchema,
@@ -44,3 +46,21 @@ export type InterestRecord = {
 }
 
 export type InterestListResult = PaginatedList<InterestRecord>
+export type InterestImportPreviewInput = z.infer<
+  typeof interestImportPreviewInputSchema
+>
+export type InterestImportInput = z.infer<typeof interestImportSchema>
+export type InterestImportPreviewStatus = 'ok' | 'warning' | 'error'
+export type InterestImportPreviewRow = {
+  rowNumber: number
+  slNo: number | null
+  personName: string | null
+  sheetAmount: number | null
+  jinisCredit: number | null
+  jinisId: string | null
+  sudh: number
+  date: string | null
+  settle: boolean
+  status: InterestImportPreviewStatus
+  message: string | null
+}

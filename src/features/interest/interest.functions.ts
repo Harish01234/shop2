@@ -6,6 +6,8 @@ import {
   createInterestSchema,
   deleteAllInterestSchema,
   interestIdSchema,
+  interestImportPreviewInputSchema,
+  interestImportSchema,
   listInterestSchema,
   updateInterestSchema,
 } from './interest.schema'
@@ -14,7 +16,9 @@ import {
   deleteAllInterestRecords,
   deleteInterestRecord,
   getInterestRecord,
+  importInterestRecords,
   listInterestRecords,
+  previewInterestImport,
   sumInterestAmount,
   updateInterestRecord,
 } from './interest.server'
@@ -78,3 +82,15 @@ export const deleteAllInterest = createServerFn({ method: 'POST' })
   .middleware([requireUserMiddleware])
   .validator(deleteAllInterestSchema)
   .handler(async ({ data }) => deleteAllInterestRecords(data))
+
+export const previewInterestCsv = createServerFn({ method: 'POST' })
+  .middleware([requireUserMiddleware])
+  .validator(interestImportPreviewInputSchema)
+  .handler(async ({ data }) => previewInterestImport(data))
+
+export const importInterest = createServerFn({ method: 'POST' })
+  .middleware([requireUserMiddleware])
+  .validator(interestImportSchema)
+  .handler(async ({ data, context }) =>
+    importInterestRecords(data, context.session.user.id),
+  )

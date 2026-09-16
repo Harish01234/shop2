@@ -263,8 +263,7 @@ enum MainCalculationRecordStatus {
 /// App-layer validation (not enforceable in schema):
 /// - dailyCalculationId must reference a DailyCalculation with recordStatus === OPEN
 /// - bandak uses the same total as Total Active Jinis Credit (SUM credit where active)
-/// - jinisChara must use outstanding credit as of calculationDate (historical state),
-///   not simply today's active field — see the calculation service
+/// - jinisChara uses the same total as Total Active JinisChara Credit (SUM credit where active)
 model MainCalculation {
   id String @id @default(cuid())
 

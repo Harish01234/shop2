@@ -1,18 +1,28 @@
-import { PrismaClient } from './generated/prisma/client.js'
-
-import { getDatabaseUrl } from './database-url.js'
+import { Pool } from 'pg'
 
 import { PrismaPg } from '@prisma/adapter-pg'
 
+import { PrismaClient } from './generated/prisma/client.js'
+import { getDatabaseUrl } from './database-url.js'
+
 declare global {
+  var __pgPool: Pool | undefined
   var __prisma: PrismaClient | undefined
 }
 
-function createPrisma() {
-  const adapter = new PrismaPg({
+function createPool() {
+  return new Pool({
     connectionString: getDatabaseUrl(),
   })
-  return new PrismaClient({ adapter })
+}
+
+const cachedPool = globalThis.__pgPool
+export const pgPool = cachedPool ?? createPool()
+
+function createPrisma() {
+  return new PrismaClient({
+    adapter: new PrismaPg(pgPool),
+  })
 }
 
 function isUsablePrismaClient(client: PrismaClient | undefined) {
@@ -27,5 +37,6 @@ const cached = globalThis.__prisma
 export const prisma = isUsablePrismaClient(cached) ? cached! : createPrisma()
 
 if (process.env.NODE_ENV !== 'production') {
+  globalThis.__pgPool = pgPool
   globalThis.__prisma = prisma
 }

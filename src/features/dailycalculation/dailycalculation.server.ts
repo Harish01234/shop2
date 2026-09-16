@@ -122,9 +122,9 @@ export async function refreshDailyCalculationsForDates(
     })
     .map((row) => row.id)
 
-  await Promise.all(
-    ids.map((id) => refreshDailyCalculationTotalsRecord({ id })),
-  )
+  for (const id of ids) {
+    await refreshDailyCalculationTotalsRecord({ id })
+  }
 }
 
 export async function refreshAllDailyCalculationTotals() {
@@ -132,9 +132,9 @@ export async function refreshAllDailyCalculationTotals() {
     select: { id: true },
   })
 
-  await Promise.all(
-    records.map((row) => refreshDailyCalculationTotalsRecord({ id: row.id })),
-  )
+  for (const row of records) {
+    await refreshDailyCalculationTotalsRecord({ id: row.id })
+  }
 }
 
 async function computeAsolForPeriod(periodStart: Date, periodEnd: Date) {
@@ -143,16 +143,14 @@ async function computeAsolForPeriod(periodStart: Date, periodEnd: Date) {
     lte: periodEnd,
   }
 
-  const [settledJinis, settledJinisChara] = await Promise.all([
-    prisma.jinis.aggregate({
-      where: { settledAt: inPeriod },
-      _sum: { credit: true },
-    }),
-    prisma.jinisChara.aggregate({
-      where: { settledAt: inPeriod },
-      _sum: { credit: true },
-    }),
-  ])
+  const settledJinis = await prisma.jinis.aggregate({
+    where: { settledAt: inPeriod },
+    _sum: { credit: true },
+  })
+  const settledJinisChara = await prisma.jinisChara.aggregate({
+    where: { settledAt: inPeriod },
+    _sum: { credit: true },
+  })
 
   return (settledJinis._sum.credit ?? 0) + (settledJinisChara._sum.credit ?? 0)
 }
@@ -171,26 +169,19 @@ async function computePeriodTotals(input: {
     lte: periodEnd,
   }
 
-  const [
-    asol,
-    interestInPeriod,
-    issuedJinis,
-    issuedJinisChara,
-  ] = await Promise.all([
-    computeAsolForPeriod(periodStart, periodEnd),
-    prisma.interest.aggregate({
-      where: { date: inPeriod },
-      _sum: { amount: true },
-    }),
-    prisma.jinis.aggregate({
-      where: { date: inPeriod },
-      _sum: { credit: true },
-    }),
-    prisma.jinisChara.aggregate({
-      where: { date: inPeriod },
-      _sum: { credit: true },
-    }),
-  ])
+  const asol = await computeAsolForPeriod(periodStart, periodEnd)
+  const interestInPeriod = await prisma.interest.aggregate({
+    where: { date: inPeriod },
+    _sum: { amount: true },
+  })
+  const issuedJinis = await prisma.jinis.aggregate({
+    where: { date: inPeriod },
+    _sum: { credit: true },
+  })
+  const issuedJinisChara = await prisma.jinisChara.aggregate({
+    where: { date: inPeriod },
+    _sum: { credit: true },
+  })
 
   const sudh = interestInPeriod._sum.amount ?? 0
   const deoya =

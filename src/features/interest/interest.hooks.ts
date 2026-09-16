@@ -8,6 +8,8 @@ import {
   createInterest,
   deleteAllInterest,
   deleteInterest,
+  importInterest,
+  previewInterestCsv,
   updateInterest,
 } from './interest.functions'
 import {
@@ -19,6 +21,8 @@ import type { InterestFilterValues } from './interest.filters'
 import type {
   CreateInterestInput,
   DeleteAllInterestInput,
+  InterestImportInput,
+  InterestImportPreviewInput,
   InterestRecord,
   InterestSource,
   UpdateInterestInput,
@@ -145,6 +149,37 @@ export function useDeleteInterest() {
       toast.add({
         title: 'Could not delete Interest',
         description: 'Please try again.',
+        type: 'error',
+      })
+    },
+  })
+}
+
+export function usePreviewInterestImport() {
+  const previewFn = useServerFn(previewInterestCsv)
+
+  return useMutation({
+    mutationFn: (data: InterestImportPreviewInput) => previewFn({ data }),
+  })
+}
+
+export function useImportInterest() {
+  const queryClient = useQueryClient()
+  const importFn = useServerFn(importInterest)
+
+  return useMutation({
+    mutationFn: (data: InterestImportInput) => importFn({ data }),
+    onSuccess: async () => {
+      await Promise.all([
+        refetchInterestLists(queryClient),
+        refetchDailyCalculations(queryClient),
+        refetchJinisLists(queryClient),
+      ])
+    },
+    onError: (error) => {
+      toast.add({
+        title: 'Could not import Interest',
+        description: getErrorMessage(error, 'Please try again.'),
         type: 'error',
       })
     },

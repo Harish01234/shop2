@@ -115,3 +115,38 @@ export const interestSearchSchema = z.object({
   to: z.string().trim().optional(),
   page: z.coerce.number().int().positive().optional(),
 })
+
+export const interestImportPreviewInputSchema = z.object({
+  fileName: z.string().trim().min(1),
+  content: z.string().min(1),
+  encoding: z.enum(['utf8', 'base64']),
+})
+
+export const interestImportRowSchema = z
+  .object({
+    amount: requiredNonNegativeInt(
+      'Enter amount',
+      'Amount must be a whole number 0 or greater',
+    ),
+    date: calendarDateField,
+    jinisId: z.preprocess(
+      emptyToUndefined,
+      z.string().trim().min(1).optional(),
+    ),
+    personName: z.preprocess(
+      emptyToUndefined,
+      requiredText('Enter a name').optional(),
+    ),
+    settle: z.boolean(),
+  })
+  .refine((data) => Boolean(data.jinisId || data.personName), {
+    message: 'Link this Interest to a Jinis or person.',
+  })
+  .refine((data) => !data.settle || Boolean(data.jinisId), {
+    message: 'Settled can only be used when linked to a Jinis.',
+    path: ['settle'],
+  })
+
+export const interestImportSchema = z.object({
+  rows: z.array(interestImportRowSchema).min(1).max(5000),
+})

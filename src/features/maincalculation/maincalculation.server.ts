@@ -6,10 +6,10 @@ import {
   dayEnd,
   dayStart,
   queryPeriodForCalculation,
-  toCalendarDay,
 } from '#/lib/calendar-date'
 import { sumPersonMoneyTotal } from '#/features/dailycalculation/dailycalculation.utils'
 import { sumActiveJinisCredit } from '#/features/jinis/jinis.server'
+import { sumActiveJinisCharaCredit } from '#/features/jinischara/jinischara.server'
 
 import type {
   CreateMainCalculationInput,
@@ -45,14 +45,6 @@ const relatedInclude = {
     },
   },
 } as const
-
-function jinisCharaOutstandingAsOf(calculationDate: Date) {
-  const asOfEnd = dayEnd(toCalendarDay(calculationDate))
-  return {
-    date: { lte: asOfEnd },
-    OR: [{ settledAt: null }, { settledAt: { gt: asOfEnd } }],
-  }
-}
 
 async function computeLinkedDailyCalculationValues(dailyCalculationId: string) {
   const dailyCalculation = await prisma.dailyCalculation.findUniqueOrThrow({
@@ -133,18 +125,14 @@ export async function calculateMainCalculationTotals(input: {
     input.excludeMainCalculationId,
   )
 
-  const [linkedDailyValues, bandak, jinisCharaAgg] = await Promise.all([
+  const [linkedDailyValues, bandak, jinisChara] = await Promise.all([
     computeLinkedDailyCalculationValues(input.dailyCalculationId),
     sumActiveJinisCredit(),
-    prisma.jinisChara.aggregate({
-      where: jinisCharaOutstandingAsOf(input.calculationDate),
-      _sum: { credit: true },
-    }),
+    sumActiveJinisCharaCredit(),
   ])
 
   const interest = linkedDailyValues.interest
   const cash = linkedDailyValues.cash
-  const jinisChara = jinisCharaAgg._sum.credit ?? 0
 
   return {
     interest,

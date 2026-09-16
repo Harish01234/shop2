@@ -297,8 +297,8 @@ export function MainCalculationForm({
             <CardTitle className="text-base">Summary</CardTitle>
             <CardDescription>
               Interest and Cash come from the linked Daily Calculation. Bandak
-              matches Total Active Jinis Credit. Jinis Chara uses outstanding
-              credit as of the calculation date.
+              matches Total Active Jinis Credit. Jinis Chara matches Total
+              Active JinisChara Credit.
             </CardDescription>
           </CardHeader>
           <CardContent>

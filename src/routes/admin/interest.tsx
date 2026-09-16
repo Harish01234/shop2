@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AlertCircleIcon } from 'lucide-react'
 
 import { AdvanceSearchFilter } from '#/features/interest/component/AdvanceSearchFilter'
+import { InterestImportModal } from '#/features/interest/component/interest-import-modal'
 import { InterestModal } from '#/features/interest/component/interest-modal'
 import { InterestTable } from '#/features/interest/component/interest-table'
 import {
@@ -118,6 +119,7 @@ function AdminInterestPage() {
   const deleteAllMutation = useDeleteAllInterest()
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<InterestRecord | undefined>()
   const [deleteTarget, setDeleteTarget] = useState<InterestRecord | null>(null)
   const [deleteAllOpen, setDeleteAllOpen] = useState(false)
@@ -185,6 +187,13 @@ function AdminInterestPage() {
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={openCreateModal}>
             Create Interest
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+          >
+            Import
           </Button>
           <Button
             type="button"
@@ -285,6 +294,8 @@ function AdminInterestPage() {
           setEditingRecord(undefined)
         }}
       />
+
+      <InterestImportModal open={importOpen} onOpenChange={setImportOpen} />
 
       <AlertDialog
         open={deleteAllOpen}
