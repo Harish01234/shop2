@@ -33,7 +33,6 @@ A record issued in one period and settled in another counts as Deoya in the issu
 
 Never use `createdAt` for Asol / Sudh / Deoya. Period queries are inclusive.
 
-An **OPEN** Daily Calculation is a growing range: `periodStart <= date <= today`. Do not stop at the stored `periodEnd` while it is still open.
-A **CLOSED** Daily Calculation uses the stored range: `periodStart <= date <= periodEnd`.
+Asol, Sudh, and Deoya always use the stored range: `periodStart <= date <= periodEnd`, whether the record is OPEN or CLOSED. Editing those dates must persist them to the database and the UI must show the same values.
 
-Periods must not overlap. Treat an OPEN record as occupying `periodStart` through today when checking overlap.
+Periods must not overlap. Compare stored `periodStart` through stored `periodEnd`.

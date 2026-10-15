@@ -102,25 +102,19 @@ export function DailyCalculationForm({
 
   const [previewPeriod, setPreviewPeriod] = useState({
     periodStart: toDateInput(periodStart),
-    periodEnd:
-      isEdit && record?.recordStatus === 'OPEN'
-        ? toDateInput(new Date())
-        : toDateInput(periodEnd),
+    periodEnd: toDateInput(periodEnd),
   })
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setPreviewPeriod({
         periodStart: toDateInput(periodStart),
-        periodEnd:
-          isEdit && record?.recordStatus === 'OPEN'
-            ? toDateInput(new Date())
-            : toDateInput(periodEnd),
+        periodEnd: toDateInput(periodEnd),
       })
     }, 400)
 
     return () => window.clearTimeout(timer)
-  }, [isEdit, periodEnd, periodStart, record?.recordStatus])
+  }, [periodEnd, periodStart])
 
   const previewQuery = usePreviewDailyCalculation(
     previewPeriod.periodStart,
@@ -197,8 +191,7 @@ export function DailyCalculationForm({
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Period</CardTitle>
           <CardDescription>
-            While open, Asol, Sudh, and Deoya include activity from period
-            start through today. Closing freezes the range.
+            Asol, Sudh, and Deoya use the period start and period end you save.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -210,7 +203,6 @@ export function DailyCalculationForm({
               <Input
                 id="periodStart"
                 type="date"
-                disabled={isEdit}
                 aria-invalid={Boolean(errors.periodStart)}
                 {...form.register('periodStart')}
               />
@@ -223,7 +215,6 @@ export function DailyCalculationForm({
               <Input
                 id="periodEnd"
                 type="date"
-                disabled={isEdit && record?.recordStatus === 'OPEN'}
                 aria-invalid={Boolean(errors.periodEnd)}
                 {...form.register('periodEnd')}
               />

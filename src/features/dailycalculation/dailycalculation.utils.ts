@@ -47,12 +47,8 @@ export function formatPeriod(start: Date | string, end: Date | string) {
 export function formatPeriodLabel(
   start: Date | string,
   end: Date | string,
-  recordStatus: DailyCalculationRecordStatus,
+  _recordStatus?: DailyCalculationRecordStatus,
 ) {
-  const startLabel = formatCalendarDate(start)
-  if (recordStatus === 'OPEN') {
-    return `${startLabel} – Ongoing`
-  }
   return formatPeriod(start, end)
 }
 

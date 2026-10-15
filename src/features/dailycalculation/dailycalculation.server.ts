@@ -74,15 +74,11 @@ async function assertNoOverlappingPeriod(
 
   const records = await prisma.dailyCalculation.findMany({
     where: excludeId ? { id: { not: excludeId } } : undefined,
-    select: { id: true, periodStart: true, periodEnd: true, recordStatus: true },
+    select: { id: true, periodStart: true, periodEnd: true },
   })
 
   const overlapping = records.some((row) => {
-    const other = queryPeriodForCalculation(
-      row.periodStart,
-      row.periodEnd,
-      row.recordStatus,
-    )
+    const other = inclusivePeriod(row.periodStart, row.periodEnd)
     return (
       incoming.periodStart.getTime() <= other.periodEnd.getTime() &&
       incoming.periodEnd.getTime() >= other.periodStart.getTime()
@@ -782,10 +778,7 @@ export async function closeDailyCalculationRecord(
     return null
   }
 
-  const periodEnd =
-    existing.recordStatus === 'OPEN'
-      ? canonicalizeCalendarDate(new Date())
-      : canonicalizeCalendarDate(existing.periodEnd)
+  const periodEnd = canonicalizeCalendarDate(existing.periodEnd)
   const period = inclusivePeriod(existing.periodStart, periodEnd)
   const totals = await computePeriodTotals({
     ...period,

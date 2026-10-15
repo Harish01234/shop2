@@ -85,31 +85,35 @@ export const optionalNonNegativeNumber = z.preprocess((value) => {
   return toFiniteNumber(next)
 }, z.number().nonnegative('Enter a number 0 or greater').optional())
 
-export const calendarDateField = z.preprocess((value) => {
+function toCalendarDateString(value: unknown) {
   if (value instanceof Date) {
-    const day = toDateInput(value)
-    return day || undefined
+    return toDateInput(value) || undefined
   }
   if (typeof value === 'string') {
     const trimmed = value.trim()
-    return trimmed || undefined
+    if (!trimmed) return undefined
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+    return toDateInput(trimmed) || undefined
   }
   return undefined
-}, z.string({ error: 'Choose a date' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date').transform((day) => parseDateInput(day)))
+}
 
-export const optionalCalendarDateField = z.preprocess((value) => {
-  if (value == null || value === '') return undefined
-  if (value instanceof Date) {
-    const day = toDateInput(value)
-    return day || undefined
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    return trimmed || undefined
-  }
-  return undefined
-}, z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date')
-  .transform((day) => parseDateInput(day))
-  .optional())
+export const calendarDateField = z.preprocess(
+  toCalendarDateString,
+  z
+    .string({ error: 'Choose a date' })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date')
+    .transform((day) => parseDateInput(day)),
+)
+
+export const optionalCalendarDateField = z.preprocess(
+  (value) => {
+    if (value == null || value === '') return undefined
+    return toCalendarDateString(value)
+  },
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date')
+    .transform((day) => parseDateInput(day))
+    .optional(),
+)

@@ -19,6 +19,7 @@ import {
   previewDailyCalculationQueryOptions,
   refetchDailyCalculationDetail,
   refetchDailyCalculationLists,
+  refetchDailyCalculations,
 } from './dailycalculation.queries'
 import type { DailyCalculationFilterValues } from './dailycalculation.filters'
 import type {
@@ -126,7 +127,7 @@ export function useUpdateDailyCalculation() {
   return useMutation({
     mutationFn: (data: UpdateDailyCalculationInput) => updateFn({ data }),
     onSuccess: async () => {
-      await refetchDailyCalculationLists(queryClient)
+      await refetchDailyCalculations(queryClient)
       toast.add({
         title: 'Daily Calculation updated successfully',
         type: 'success',
@@ -149,7 +150,7 @@ export function useCloseDailyCalculation() {
   return useMutation({
     mutationFn: (data: CloseDailyCalculationInput) => closeFn({ data }),
     onSuccess: async () => {
-      await refetchDailyCalculationLists(queryClient)
+      await refetchDailyCalculations(queryClient)
       toast.add({
         title: 'Daily Calculation closed',
         type: 'success',
